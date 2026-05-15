@@ -11,4 +11,5 @@ public sealed record DiffReviewReport(
     IReadOnlyList<ReviewFinding> Findings,
     string Markdown,
     string? LlmSummary = null,
-    string LlmProvider = "Deterministic");
+    string LlmProvider = "Deterministic",
+    GpuSearchReviewContext? GpuSearchContext = null);

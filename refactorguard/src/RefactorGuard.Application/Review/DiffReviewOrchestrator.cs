@@ -5,7 +5,9 @@ namespace RefactorGuard.Application.Review;
 
 public sealed class DiffReviewOrchestrator(
     IGitDiffService gitDiffService,
-    IReviewReportFormatter reportFormatter) : IReviewOrchestrator
+    IReviewReportFormatter reportFormatter,
+    IReviewPromptBuilder promptBuilder,
+    IReviewLlmProvider llmProvider) : IReviewOrchestrator
 {
     public async Task<DiffReviewReport> ReviewDiffAsync(
         DiffReviewRequest request,
@@ -16,6 +18,9 @@ public sealed class DiffReviewOrchestrator(
             cancellationToken);
 
         var findings = BuildFindings(diff);
+        var llmSummary = request.UseLlm
+            ? await llmProvider.GenerateReviewAsync(promptBuilder.Build(diff, findings), cancellationToken)
+            : null;
         var report = new DiffReviewReport(
             Guid.NewGuid().ToString("N"),
             diff.RepoPath,
@@ -23,7 +28,9 @@ public sealed class DiffReviewOrchestrator(
             diff.ChangedFileCount,
             diff.Files,
             findings,
-            string.Empty);
+            string.Empty,
+            llmSummary,
+            request.UseLlm ? llmProvider.Name : "Deterministic");
 
         return report with
         {

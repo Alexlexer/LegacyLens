@@ -62,6 +62,15 @@ Use `POST /api/review/diff/preview` with a JSON body such as `{ "repoPath": "D:\
 
 Use `POST /api/review/diff` with the same body to generate a deterministic Markdown review report. This does not call an LLM.
 
+To include an LM Studio summary, start LM Studio's local OpenAI-compatible server and send:
+
+```json
+{
+  "repoPath": "D:\\Projects\\ExampleRepo",
+  "useLlm": true
+}
+```
+
 ## gpu-search-mcp Configuration
 
 RefactorGuard expects `gpu-search-mcp` HTTP mode to be reachable through configured options:
@@ -78,3 +87,22 @@ RefactorGuard expects `gpu-search-mcp` HTTP mode to be reachable through configu
 ```
 
 Use `GET /api/search/status` to verify connectivity without running a review.
+
+## LM Studio Configuration
+
+LM Studio is optional. Deterministic review remains the safe default unless `useLlm` is true and the provider is configured for LM Studio:
+
+```json
+{
+  "RefactorGuard": {
+    "Review": {
+      "Provider": "LmStudio"
+    },
+    "LmStudio": {
+      "BaseUrl": "http://127.0.0.1:1234/v1/",
+      "Model": "local-model",
+      "TimeoutSeconds": 60
+    }
+  }
+}
+```

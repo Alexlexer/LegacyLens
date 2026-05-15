@@ -9,4 +9,6 @@ public sealed record DiffReviewReport(
     int ChangedFileCount,
     IReadOnlyList<GitDiffFile> Files,
     IReadOnlyList<ReviewFinding> Findings,
-    string Markdown);
+    string Markdown,
+    string? LlmSummary = null,
+    string LlmProvider = "Deterministic");

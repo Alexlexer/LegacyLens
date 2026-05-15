@@ -68,6 +68,12 @@ Content-Type: application/json
 { "repoPath": "D:\\Projects\\SomeRepo" }
 ```
 
+Optionally request an LM Studio-enhanced summary:
+
+```json
+{ "repoPath": "D:\\Projects\\SomeRepo", "useLlm": true }
+```
+
 Configure allowed repository roots before using diff preview:
 
 ```json
@@ -77,6 +83,14 @@ Configure allowed repository roots before using diff preview:
     "GpuSearch": {
       "BaseUrl": "http://127.0.0.1:8765",
       "TimeoutSeconds": 10
+    },
+    "Review": {
+      "Provider": "LmStudio"
+    },
+    "LmStudio": {
+      "BaseUrl": "http://127.0.0.1:1234/v1/",
+      "Model": "local-model",
+      "TimeoutSeconds": 60
     }
   }
 }

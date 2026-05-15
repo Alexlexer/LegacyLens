@@ -14,11 +14,15 @@ public sealed class DiffReviewContractTests
             0,
             [],
             [new ReviewFinding("empty-diff", "Info", null, "No diff", "No changes")],
-            "# Report");
+            "# Report",
+            "LLM summary",
+            "LmStudio");
 
         Assert.Equal("id", report.ReportId);
         Assert.Equal("repo", report.RepoPath);
         Assert.Single(report.Findings);
         Assert.Equal("# Report", report.Markdown);
+        Assert.Equal("LLM summary", report.LlmSummary);
+        Assert.Equal("LmStudio", report.LlmProvider);
     }
 }

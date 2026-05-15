@@ -1,4 +1,5 @@
 using RefactorGuard.Application.Git;
+using RefactorGuard.Application.Reports;
 using RefactorGuard.Application.Review;
 using RefactorGuard.Domain.Git;
 
@@ -21,7 +22,8 @@ public sealed class DiffReviewOrchestratorTests
             new StubGitDiffService(diff),
             new MarkdownReviewReportFormatter(),
             new ReviewPromptBuilder(),
-            new StubReviewLlmProvider("LLM summary"));
+            new StubReviewLlmProvider("LLM summary"),
+            new StubReportRepository());
 
         var report = await orchestrator.ReviewDiffAsync(new DiffReviewRequest("repo"), CancellationToken.None);
 
@@ -39,11 +41,29 @@ public sealed class DiffReviewOrchestratorTests
             new StubGitDiffService(diff),
             new MarkdownReviewReportFormatter(),
             new ReviewPromptBuilder(),
-            new StubReviewLlmProvider("LLM summary"));
+            new StubReviewLlmProvider("LLM summary"),
+            new StubReportRepository());
 
         var report = await orchestrator.ReviewDiffAsync(new DiffReviewRequest("repo"), CancellationToken.None);
 
         Assert.Contains(report.Findings, finding => finding.RuleId == "empty-diff");
+    }
+
+    [Fact]
+    public async Task ReviewDiffAsync_SavesReport()
+    {
+        var repository = new StubReportRepository();
+        var diff = new GitDiffPreviewResponse("repo", 0, [], string.Empty);
+        var orchestrator = new DiffReviewOrchestrator(
+            new StubGitDiffService(diff),
+            new MarkdownReviewReportFormatter(),
+            new ReviewPromptBuilder(),
+            new StubReviewLlmProvider("LLM summary"),
+            repository);
+
+        var report = await orchestrator.ReviewDiffAsync(new DiffReviewRequest("repo"), CancellationToken.None);
+
+        Assert.Same(report, repository.SavedReport);
     }
 
     private sealed class StubGitDiffService(GitDiffPreviewResponse response) : IGitDiffService
@@ -65,6 +85,32 @@ public sealed class DiffReviewOrchestratorTests
             CancellationToken cancellationToken)
         {
             return Task.FromResult<string?>(summary);
+        }
+    }
+
+    private sealed class StubReportRepository : IReportRepository
+    {
+        public DiffReviewReport? SavedReport { get; private set; }
+
+        public Task SaveAsync(DiffReviewReport report, CancellationToken cancellationToken)
+        {
+            SavedReport = report;
+            return Task.CompletedTask;
+        }
+
+        public Task<DiffReviewReport?> GetByIdAsync(string reportId, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<DiffReviewReport?>(SavedReport?.ReportId == reportId ? SavedReport : null);
+        }
+
+        public Task<IReadOnlyList<ReportSummary>> ListAsync(CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<ReportSummary>>([]);
+        }
+
+        public Task<bool> DeleteAsync(string reportId, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(false);
         }
     }
 }

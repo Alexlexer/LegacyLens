@@ -1,4 +1,5 @@
 using RefactorGuard.Application.Git;
+using RefactorGuard.Application.Reports;
 using RefactorGuard.Domain.Git;
 
 namespace RefactorGuard.Application.Review;
@@ -7,7 +8,8 @@ public sealed class DiffReviewOrchestrator(
     IGitDiffService gitDiffService,
     IReviewReportFormatter reportFormatter,
     IReviewPromptBuilder promptBuilder,
-    IReviewLlmProvider llmProvider) : IReviewOrchestrator
+    IReviewLlmProvider llmProvider,
+    IReportRepository reportRepository) : IReviewOrchestrator
 {
     public async Task<DiffReviewReport> ReviewDiffAsync(
         DiffReviewRequest request,
@@ -32,10 +34,12 @@ public sealed class DiffReviewOrchestrator(
             llmSummary,
             request.UseLlm ? llmProvider.Name : "Deterministic");
 
-        return report with
+        var finalReport = report with
         {
             Markdown = reportFormatter.Format(report)
         };
+        await reportRepository.SaveAsync(finalReport, cancellationToken);
+        return finalReport;
     }
 
     private static IReadOnlyList<ReviewFinding> BuildFindings(GitDiffPreviewResponse diff)

@@ -83,6 +83,14 @@ Content-Type: application/json
 { "repoPath": "D:\\Projects\\SomeRepo" }
 ```
 
+Generated review reports are saved to SQLite. Manage saved reports:
+
+```text
+GET /api/reports
+GET /api/reports/{id}
+DELETE /api/reports/{id}
+```
+
 Optionally request an LM Studio-enhanced summary:
 
 ```json
@@ -106,6 +114,9 @@ Configure allowed repository roots before using diff preview:
       "BaseUrl": "http://127.0.0.1:1234/v1/",
       "Model": "local-model",
       "TimeoutSeconds": 60
+    },
+    "Persistence": {
+      "DatabasePath": "data/refactorguard.db"
     }
   }
 }

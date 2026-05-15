@@ -1,6 +1,7 @@
 using RefactorGuard.Application;
 using RefactorGuard.Application.DotNetAnalysis;
 using RefactorGuard.Application.Git;
+using RefactorGuard.Application.Reports;
 using RefactorGuard.Application.Review;
 using RefactorGuard.Application.Search;
 using RefactorGuard.Domain.Common;
@@ -119,6 +120,29 @@ app.MapPost("/api/review/diff", async (
             StatusCodes.Status400BadRequest,
             ex.Message));
     }
+});
+app.MapGet("/api/reports", async (
+    IReportRepository reports,
+    CancellationToken cancellationToken) =>
+{
+    var result = await reports.ListAsync(cancellationToken);
+    return Results.Ok(result);
+});
+app.MapGet("/api/reports/{id}", async (
+    string id,
+    IReportRepository reports,
+    CancellationToken cancellationToken) =>
+{
+    var report = await reports.GetByIdAsync(id, cancellationToken);
+    return report is null ? Results.NotFound() : Results.Ok(report);
+});
+app.MapDelete("/api/reports/{id}", async (
+    string id,
+    IReportRepository reports,
+    CancellationToken cancellationToken) =>
+{
+    var deleted = await reports.DeleteAsync(id, cancellationToken);
+    return deleted ? Results.NoContent() : Results.NotFound();
 });
 
 app.Run();

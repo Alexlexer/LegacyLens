@@ -6,6 +6,7 @@ using RefactorGuard.Application.Search;
 using RefactorGuard.Infrastructure.Git;
 using RefactorGuard.Infrastructure.GpuSearch;
 using RefactorGuard.Infrastructure.Llm;
+using RefactorGuard.Infrastructure.Persistence;
 using RefactorGuard.Infrastructure.Security;
 
 namespace RefactorGuard.Infrastructure;
@@ -54,6 +55,12 @@ public static class DependencyInjection
         services.AddKeyedScoped<IReviewLlmProvider>("lmstudio", (serviceProvider, _) =>
             serviceProvider.GetRequiredService<LmStudioReviewLlmProvider>());
         services.AddScoped<IReviewLlmProvider, ReviewLlmProviderFactory>();
+        services.AddOptions<PersistenceOptions>()
+            .Bind(configuration.GetSection(PersistenceOptions.SectionName))
+            .ValidateDataAnnotations()
+            .Validate(options => !Path.IsPathRooted(options.DatabasePath), "Persistence DatabasePath must be relative.")
+            .ValidateOnStart();
+        services.AddScoped<RefactorGuard.Application.Reports.IReportRepository, SqliteReportRepository>();
         return services;
     }
 }

@@ -7,6 +7,12 @@ AGENTS.md
 bin/
 obj/
 
+# Local runtime data
+data/
+*.db
+*.db-shm
+*.db-wal
+
 # Local IDE/user files
 .vs/
 *.user

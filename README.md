@@ -84,13 +84,29 @@ Content-Type: application/json
 { "repoPath": "D:\\Projects\\SomeRepo" }
 ```
 
-Generate a deterministic Markdown review report without an LLM:
+Generate a Markdown review report enriched with gpu-search-mcp context:
 
 ```text
 POST /api/review/diff
 Content-Type: application/json
 
 { "repoPath": "D:\\Projects\\SomeRepo" }
+```
+
+When `gpu-search-mcp` is running, the report includes dependency impact, file skeletons, and related search results for each changed file. If gpu-search-mcp is not running, the review still completes with a deterministic report and adds an `Info` finding noting the unavailability.
+
+Two-process workflow (full enrichment):
+
+Terminal 1 — start gpu-search-mcp:
+
+```text
+gpu-search-mcp --directory D:\Projects\SomeRepo --http --port 8765
+```
+
+Terminal 2 — start RefactorGuard:
+
+```text
+dotnet run --project src/RefactorGuard.Api
 ```
 
 Generated review reports are saved to SQLite. Manage saved reports:

@@ -55,6 +55,33 @@ python -m mypy .
 6. Commit with a conventional commit message.
 7. Push the branch and open a PR.
 
+## Diff Review with gpu-search Enrichment
+
+`POST /api/review/diff` now collects dependency impact, file skeletons, and related search results from gpu-search-mcp for each changed file (up to 10 files, 5 results per file). The Markdown report includes a **gpu-search Context** section with per-file findings.
+
+The review degrades gracefully: if gpu-search-mcp is not reachable, the deterministic review still completes and an `Info` finding is added.
+
+Recommended two-process workflow:
+
+Terminal 1 — start gpu-search-mcp pointing at the repository to analyse:
+
+```text
+gpu-search-mcp --directory D:\Projects\ExampleRepo --http --port 8765
+```
+
+Terminal 2 — start RefactorGuard:
+
+```text
+dotnet run --project src/RefactorGuard.Api
+```
+
+Then call:
+
+```text
+POST /api/review/diff
+{ "repoPath": "D:\\Projects\\ExampleRepo" }
+```
+
 ## Diff Preview Configuration
 
 Diff preview is read-only and only works for repositories under configured allowed roots:
@@ -69,7 +96,7 @@ Diff preview is read-only and only works for repositories under configured allow
 
 Use `POST /api/review/diff/preview` with a JSON body such as `{ "repoPath": "D:\\Projects\\ExampleRepo" }`.
 
-Use `POST /api/review/diff` with the same body to generate a deterministic Markdown review report. This does not call an LLM.
+Use `POST /api/review/diff` with the same body to generate an enriched Markdown review report. Append `"useLlm": true` to also include an LM Studio summary.
 
 To include an LM Studio summary, start LM Studio's local OpenAI-compatible server and send:
 

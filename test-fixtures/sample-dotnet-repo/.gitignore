@@ -1,0 +1,4 @@
+# Fixture git repo — managed by prepare-sample-diff scripts
+# The fixture's own .git directory is created at runtime by prepare-sample-diff scripts.
+# It must not be committed to the outer repository.
+.git/

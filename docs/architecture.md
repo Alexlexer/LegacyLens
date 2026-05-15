@@ -38,6 +38,8 @@ Application defines interfaces such as `IGitDiffService`, `IGpuSearchClient`, `I
 
 The current review workflow is deterministic and does not call an LLM. It inspects the Git diff preview and emits stable findings for empty diffs, large changes, test changes, and project/configuration changes.
 
+When requested, the review workflow can enrich the deterministic report through `IReviewLlmProvider`. The first provider targets LM Studio's local OpenAI-compatible `chat/completions` API. LLM prompt construction is isolated behind `IReviewPromptBuilder`.
+
 ## gpu-search Integration
 
 `RefactorGuard.Infrastructure` provides a typed HTTP client behind `IGpuSearchClient`. The API exposes `GET /api/search/status` to check `/health` and `/stats` from `gpu-search-mcp` without coupling endpoint code to HTTP details.

@@ -13,6 +13,7 @@ public static class DependencyInjection
         services.AddScoped<GpuSearchStatusWorkflow>();
         services.AddScoped<IReviewOrchestrator, DiffReviewOrchestrator>();
         services.AddSingleton<IReviewReportFormatter, MarkdownReviewReportFormatter>();
+        services.AddSingleton<IReviewPromptBuilder, ReviewPromptBuilder>();
         return services;
     }
 }

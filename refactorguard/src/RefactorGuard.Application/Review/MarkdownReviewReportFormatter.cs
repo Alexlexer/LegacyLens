@@ -39,6 +39,14 @@ public sealed class MarkdownReviewReportFormatter : IReviewReportFormatter
             markdown.AppendLine($"- **{finding.Severity}** `{finding.RuleId}` on {path}: {finding.Title}. {finding.Description}");
         }
 
+        if (!string.IsNullOrWhiteSpace(report.LlmSummary))
+        {
+            markdown.AppendLine();
+            markdown.AppendLine($"## LLM Summary ({report.LlmProvider})");
+            markdown.AppendLine();
+            markdown.AppendLine(report.LlmSummary);
+        }
+
         return markdown.ToString();
     }
 }

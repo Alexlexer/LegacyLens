@@ -16,6 +16,8 @@ Never commit secrets, `.env` files, private keys, local credentials, or machine-
 
 LLM providers must be explicit configuration choices. When using an external LLM, document the risk that source snippets or summaries may leave the machine. Prefer local providers for sensitive repositories.
 
+LM Studio support targets a local OpenAI-compatible endpoint. Treat it as sensitive because diff snippets are sent to the configured server whenever `useLlm` is true.
+
 ## Network Exposure
 
 Local services should bind to `127.0.0.1` by default. If remote access is needed, prefer a private network such as Tailscale and document the exposure clearly.

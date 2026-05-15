@@ -1,9 +1,11 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using RefactorGuard.Application.Git;
+using RefactorGuard.Application.Review;
 using RefactorGuard.Application.Search;
 using RefactorGuard.Infrastructure.Git;
 using RefactorGuard.Infrastructure.GpuSearch;
+using RefactorGuard.Infrastructure.Llm;
 using RefactorGuard.Infrastructure.Security;
 
 namespace RefactorGuard.Infrastructure;
@@ -31,6 +33,27 @@ public static class DependencyInjection
             client.BaseAddress = options.BaseUrl;
             client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
         });
+        services.AddOptions<LlmProviderOptions>()
+            .Bind(configuration.GetSection(LlmProviderOptions.SectionName))
+            .Validate(options => !string.IsNullOrWhiteSpace(options.Provider), "Review Provider is required.")
+            .ValidateOnStart();
+        services.AddOptions<LmStudioOptions>()
+            .Bind(configuration.GetSection(LmStudioOptions.SectionName))
+            .ValidateDataAnnotations()
+            .Validate(options => options.BaseUrl.IsAbsoluteUri, "LM Studio BaseUrl must be absolute.")
+            .ValidateOnStart();
+        services.AddKeyedSingleton<IReviewLlmProvider, DeterministicReviewLlmProvider>("deterministic");
+        services.AddHttpClient<LmStudioReviewLlmProvider>((serviceProvider, client) =>
+        {
+            var options = serviceProvider
+                .GetRequiredService<Microsoft.Extensions.Options.IOptions<LmStudioOptions>>()
+                .Value;
+            client.BaseAddress = options.BaseUrl;
+            client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
+        });
+        services.AddKeyedScoped<IReviewLlmProvider>("lmstudio", (serviceProvider, _) =>
+            serviceProvider.GetRequiredService<LmStudioReviewLlmProvider>());
+        services.AddScoped<IReviewLlmProvider, ReviewLlmProviderFactory>();
         return services;
     }
 }

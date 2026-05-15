@@ -19,7 +19,9 @@ public sealed class DiffReviewOrchestratorTests
             "diff");
         var orchestrator = new DiffReviewOrchestrator(
             new StubGitDiffService(diff),
-            new MarkdownReviewReportFormatter());
+            new MarkdownReviewReportFormatter(),
+            new ReviewPromptBuilder(),
+            new StubReviewLlmProvider("LLM summary"));
 
         var report = await orchestrator.ReviewDiffAsync(new DiffReviewRequest("repo"), CancellationToken.None);
 
@@ -35,7 +37,9 @@ public sealed class DiffReviewOrchestratorTests
         var diff = new GitDiffPreviewResponse("repo", 0, [], string.Empty);
         var orchestrator = new DiffReviewOrchestrator(
             new StubGitDiffService(diff),
-            new MarkdownReviewReportFormatter());
+            new MarkdownReviewReportFormatter(),
+            new ReviewPromptBuilder(),
+            new StubReviewLlmProvider("LLM summary"));
 
         var report = await orchestrator.ReviewDiffAsync(new DiffReviewRequest("repo"), CancellationToken.None);
 
@@ -49,6 +53,18 @@ public sealed class DiffReviewOrchestratorTests
             CancellationToken cancellationToken)
         {
             return Task.FromResult(response);
+        }
+    }
+
+    private sealed class StubReviewLlmProvider(string summary) : IReviewLlmProvider
+    {
+        public string Name => "Stub";
+
+        public Task<string?> GenerateReviewAsync(
+            LlmReviewPrompt prompt,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<string?>(summary);
         }
     }
 }

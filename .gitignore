@@ -1,2 +1,13 @@
 # Local implementation notes and large planning drafts
 CODEX_IMPLEMENTATION_PLAN_REFACTORGUARD_GPU_SEARCH_PRO.md
+CODEX_IMPLEMENTATION_PLAN.md
+AGENTS.md
+
+# .NET build output
+bin/
+obj/
+
+# Local IDE/user files
+.vs/
+*.user
+*.suo

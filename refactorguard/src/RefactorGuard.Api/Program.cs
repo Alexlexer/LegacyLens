@@ -1,5 +1,6 @@
 using RefactorGuard.Application;
 using RefactorGuard.Application.Git;
+using RefactorGuard.Application.Review;
 using RefactorGuard.Application.Search;
 using RefactorGuard.Domain.Common;
 using RefactorGuard.Domain.Git;
@@ -52,6 +53,41 @@ app.MapPost("/api/review/diff/preview", async (
         return Results.BadRequest(new ProblemDetailsResponse(
             "https://refactorguard.local/errors/git-diff-failed",
             "Unable to preview Git diff",
+            StatusCodes.Status400BadRequest,
+            ex.Message));
+    }
+});
+app.MapPost("/api/review/diff", async (
+    DiffReviewRequest request,
+    IReviewOrchestrator orchestrator,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var report = await orchestrator.ReviewDiffAsync(request, cancellationToken);
+        return Results.Ok(report);
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new ProblemDetailsResponse(
+            "https://refactorguard.local/errors/invalid-request",
+            "Invalid request",
+            StatusCodes.Status400BadRequest,
+            ex.Message));
+    }
+    catch (UnauthorizedAccessException ex)
+    {
+        return Results.BadRequest(new ProblemDetailsResponse(
+            "https://refactorguard.local/errors/invalid-repo-path",
+            "Invalid repository path",
+            StatusCodes.Status400BadRequest,
+            ex.Message));
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new ProblemDetailsResponse(
+            "https://refactorguard.local/errors/diff-review-failed",
+            "Unable to review Git diff",
             StatusCodes.Status400BadRequest,
             ex.Message));
     }

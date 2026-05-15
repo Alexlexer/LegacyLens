@@ -59,6 +59,15 @@ Content-Type: application/json
 { "repoPath": "D:\\Projects\\SomeRepo" }
 ```
 
+Generate a deterministic Markdown review report without an LLM:
+
+```text
+POST /api/review/diff
+Content-Type: application/json
+
+{ "repoPath": "D:\\Projects\\SomeRepo" }
+```
+
 Configure allowed repository roots before using diff preview:
 
 ```json

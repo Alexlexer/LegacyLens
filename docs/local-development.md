@@ -38,11 +38,10 @@ python -m mypy .
 
 ## Development Flow
 
-1. Read `AGENTS.md` and `CODEX_IMPLEMENTATION_PLAN.md`.
-2. Create a focused branch.
-3. Implement only the requested scope.
-4. Add or update tests.
-5. Update docs.
-6. Run checks.
-7. Commit with a conventional commit message.
-8. Push the branch and open a PR.
+1. Create a focused branch.
+2. Implement only the requested scope.
+3. Add or update tests.
+4. Update docs.
+5. Run checks.
+6. Commit with a conventional commit message.
+7. Push the branch and open a PR.

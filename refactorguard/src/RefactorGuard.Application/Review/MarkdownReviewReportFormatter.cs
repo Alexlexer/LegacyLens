@@ -7,7 +7,7 @@ public sealed class MarkdownReviewReportFormatter : IReviewReportFormatter
     public string Format(DiffReviewReport report)
     {
         var markdown = new StringBuilder();
-        markdown.AppendLine("# RefactorGuard Diff Review");
+        markdown.AppendLine("# LegacyLens Diff Review");
         markdown.AppendLine();
         markdown.AppendLine($"- Report ID: `{report.ReportId}`");
         markdown.AppendLine($"- Repository: `{report.RepoPath}`");

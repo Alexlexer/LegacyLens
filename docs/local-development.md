@@ -9,7 +9,7 @@ Primary workstation:
 - 32 GB RAM
 - RTX 4060 8 GB
 - `gpu-search-mcp`
-- RefactorGuard API
+- LegacyLens API
 - local LLM runtime or configured external LLM client
 
 Secondary client:
@@ -69,7 +69,7 @@ Terminal 1 — start gpu-search-mcp pointing at the repository to analyse:
 gpu-search-mcp --directory D:\Projects\ExampleRepo --http --port 8765
 ```
 
-Terminal 2 — start RefactorGuard:
+Terminal 2 — start LegacyLens:
 
 ```text
 dotnet run --project src/RefactorGuard.Api
@@ -88,11 +88,13 @@ Diff preview is read-only and only works for repositories under configured allow
 
 ```json
 {
-  "RefactorGuard": {
+  "LegacyLens": {
     "AllowedRoots": ["D:\\Projects"]
   }
 }
 ```
+
+The `RefactorGuard` config section is also accepted for backward compatibility.
 
 Use `POST /api/review/diff/preview` with a JSON body such as `{ "repoPath": "D:\\Projects\\ExampleRepo" }`.
 
@@ -109,11 +111,11 @@ To include an LM Studio summary, start LM Studio's local OpenAI-compatible serve
 
 ## gpu-search-mcp Configuration
 
-RefactorGuard expects `gpu-search-mcp` HTTP mode to be reachable through configured options:
+LegacyLens expects `gpu-search-mcp` HTTP mode to be reachable through configured options:
 
 ```json
 {
-  "RefactorGuard": {
+  "LegacyLens": {
     "GpuSearch": {
       "BaseUrl": "http://127.0.0.1:8765",
       "TimeoutSeconds": 10
@@ -128,13 +130,13 @@ Use `POST /api/dotnet/analyze` to run .NET analysis presets through `gpu-search-
 
 ## Report Persistence
 
-Diff review reports are saved to SQLite. The default database path is `data/refactorguard.db` relative to the API working directory:
+Diff review reports are saved to SQLite. The default database path is `data/legacylens.db` relative to the API working directory:
 
 ```json
 {
-  "RefactorGuard": {
+  "LegacyLens": {
     "Persistence": {
-      "DatabasePath": "data/refactorguard.db"
+      "DatabasePath": "data/legacylens.db"
     }
   }
 }
@@ -156,7 +158,7 @@ LM Studio is optional. Deterministic review remains the safe default unless `use
 
 ```json
 {
-  "RefactorGuard": {
+  "LegacyLens": {
     "Review": {
       "Provider": "LmStudio"
     },

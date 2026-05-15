@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-RefactorGuard analyzes source repositories that may contain sensitive code and secrets.
+LegacyLens analyzes source repositories that may contain sensitive code and secrets.
 
 ## Decision
 

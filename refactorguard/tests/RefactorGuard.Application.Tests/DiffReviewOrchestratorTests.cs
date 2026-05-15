@@ -27,7 +27,7 @@ public sealed class DiffReviewOrchestratorTests
         Assert.Equal("repo", report.RepoPath);
         Assert.Equal(2, report.ChangedFileCount);
         Assert.Contains(report.Findings, f => f.RuleId == "test-change");
-        Assert.Contains("# RefactorGuard Diff Review", report.Markdown);
+        Assert.Contains("# LegacyLens Diff Review", report.Markdown);
     }
 
     [Fact]

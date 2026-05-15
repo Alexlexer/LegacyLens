@@ -1,20 +1,22 @@
 # Architecture
 
-RefactorGuard is planned as a local .NET service that reviews Git diffs and legacy .NET code with help from `gpu-search-mcp` and an LLM provider.
+LegacyLens is a local .NET service that reviews Git diffs and legacy .NET code with help from `gpu-search-mcp` and an LLM provider.
+
+> **Naming note:** The internal .NET projects and namespaces still use the `RefactorGuard` prefix from the original bootstrap (`RefactorGuard.Api`, `RefactorGuard.Application`, etc.). These are implementation details and may be renamed in a later refactor. The public product name is LegacyLens.
 
 ## Layers
 
 ```text
-RefactorGuard.Api
+RefactorGuard.Api          (LegacyLens HTTP API)
   HTTP endpoints, request validation, response formatting
 
-RefactorGuard.Application
+RefactorGuard.Application  (LegacyLens orchestration)
   Review orchestration, workflows, interfaces, prompt construction
 
-RefactorGuard.Domain
+RefactorGuard.Domain       (LegacyLens domain types)
   Records, enums, result objects, common domain types
 
-RefactorGuard.Infrastructure
+RefactorGuard.Infrastructure  (LegacyLens infrastructure)
   Git CLI, gpu-search HTTP client, LLM providers, SQLite, filesystem access
 ```
 
@@ -42,7 +44,7 @@ When requested, the review workflow can enrich the deterministic report through 
 
 ## gpu-search Integration
 
-`RefactorGuard.Infrastructure` provides a typed HTTP client behind `IGpuSearchClient`. The API exposes `GET /api/search/status` to check `/health` and `/stats` from `gpu-search-mcp` without coupling endpoint code to HTTP details.
+`RefactorGuard.Infrastructure` provides a typed HTTP client behind `IGpuSearchClient`. The LegacyLens API exposes `GET /api/search/status` to check `/health` and `/stats` from `gpu-search-mcp` without coupling endpoint code to HTTP details.
 
 `POST /api/dotnet/analyze` uses the same client to run preset hybrid searches for common .NET review risks. Preset definitions live in Application so they remain testable and independent of HTTP details.
 
@@ -52,7 +54,7 @@ When requested, the review workflow can enrich the deterministic report through 
 
 ## Frontend
 
-The first UI is a minimal Vite app under `refactorguard/ui`. Its production build writes static assets into `RefactorGuard.Api/wwwroot`, and the API serves them with ASP.NET Core static file middleware.
+The first UI is a minimal Vite app under `refactorguard/ui`. Its production build writes static assets into `RefactorGuard.Api/wwwroot`, and the LegacyLens API serves them with ASP.NET Core static file middleware.
 
 ## Design Rules
 

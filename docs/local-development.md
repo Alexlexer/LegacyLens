@@ -59,3 +59,20 @@ Diff preview is read-only and only works for repositories under configured allow
 ```
 
 Use `POST /api/review/diff/preview` with a JSON body such as `{ "repoPath": "D:\\Projects\\ExampleRepo" }`.
+
+## gpu-search-mcp Configuration
+
+RefactorGuard expects `gpu-search-mcp` HTTP mode to be reachable through configured options:
+
+```json
+{
+  "RefactorGuard": {
+    "GpuSearch": {
+      "BaseUrl": "http://127.0.0.1:8765",
+      "TimeoutSeconds": 10
+    }
+  }
+}
+```
+
+Use `GET /api/search/status` to verify connectivity without running a review.

@@ -1,5 +1,6 @@
 using RefactorGuard.Application;
 using RefactorGuard.Application.Git;
+using RefactorGuard.Application.Search;
 using RefactorGuard.Domain.Common;
 using RefactorGuard.Domain.Git;
 using RefactorGuard.Infrastructure;
@@ -13,6 +14,13 @@ var app = builder.Build();
 
 app.MapGet("/", () => Results.Redirect("/health"));
 app.MapGet("/health", () => Results.Ok(SystemHealth.Healthy()));
+app.MapGet("/api/search/status", async (
+    GpuSearchStatusWorkflow workflow,
+    CancellationToken cancellationToken) =>
+{
+    var status = await workflow.GetStatusAsync(cancellationToken);
+    return Results.Ok(status);
+});
 app.MapPost("/api/review/diff/preview", async (
     GitDiffPreviewRequest request,
     IGitDiffService gitDiffService,

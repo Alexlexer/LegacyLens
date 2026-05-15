@@ -85,14 +85,38 @@ public sealed class MarkdownReviewReportFormatter : IReviewReportFormatter
 
             if (fileCtx.DependencyImpact is not null)
             {
-                markdown.AppendLine($"**Dependency impact:** {fileCtx.DependencyImpact.TotalImpacted} impacted file(s)");
-                if (fileCtx.DependencyImpact.DirectImporters.Count > 0)
-                {
-                    var importers = string.Join(", ",
-                        fileCtx.DependencyImpact.DirectImporters.Take(5).Select(f => $"`{f}`"));
-                    markdown.AppendLine($"Direct importers: {importers}");
-                }
+                markdown.AppendLine("**Dependency impact:**");
                 markdown.AppendLine();
+
+                var di = fileCtx.DependencyImpact;
+                markdown.AppendLine($"- Impacted files: {di.TotalImpacted}");
+
+                if (di.Confidence is not null)
+                    markdown.AppendLine($"- Confidence: {di.Confidence}");
+
+                if (di.AnalysisMode is not null)
+                    markdown.AppendLine($"- Analysis mode: {di.AnalysisMode}");
+
+                if (di.DirectImporters.Count > 0)
+                {
+                    var importers = string.Join(", ", di.DirectImporters.Take(5).Select(f => $"`{f}`"));
+                    markdown.AppendLine($"- Direct importers: {importers}");
+                }
+
+                var warnings = di.Warnings ?? [];
+                foreach (var warning in warnings)
+                    markdown.AppendLine($"- Warning: {warning}");
+
+                markdown.AppendLine();
+
+                var limitations = di.Limitations ?? [];
+                if (limitations.Count > 0)
+                {
+                    markdown.AppendLine("**Dependency impact limitations** *(advisory only — not compiler-accurate):*");
+                    foreach (var limitation in limitations)
+                        markdown.AppendLine($"- {limitation}");
+                    markdown.AppendLine();
+                }
             }
 
             if (fileCtx.RelatedResults.Count > 0)

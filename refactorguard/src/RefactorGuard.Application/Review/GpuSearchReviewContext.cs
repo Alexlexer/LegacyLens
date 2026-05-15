@@ -14,7 +14,11 @@ public sealed record ChangedFileContext(
 
 public sealed record DependencyImpactSummary(
     int TotalImpacted,
-    IReadOnlyList<string> DirectImporters);
+    IReadOnlyList<string> DirectImporters,
+    string? Confidence = null,
+    string? AnalysisMode = null,
+    IReadOnlyList<string>? Limitations = null,
+    IReadOnlyList<string>? Warnings = null);
 
 public sealed record SkeletonSummary(string Content, string? Language);
 

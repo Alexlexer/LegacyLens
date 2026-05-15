@@ -36,4 +36,29 @@ public sealed class ReviewPromptBuilderTests
         Assert.True(prompt.Diff.Length < diffText.Length);
         Assert.Contains("[diff truncated]", prompt.Diff);
     }
+
+    [Fact]
+    public void Build_IncludesGpuSearchContext_WhenProvided()
+    {
+        var diff = new GitDiffPreviewResponse("repo", 1, [], "+change");
+        var context = new GpuSearchReviewContext(
+            true,
+            [new ChangedFileContext("src/App.cs", null, null, [])]);
+
+        var prompt = new ReviewPromptBuilder().Build(diff, [], context);
+
+        Assert.NotNull(prompt.GpuSearchContext);
+        Assert.True(prompt.GpuSearchContext!.WasAvailable);
+        Assert.Single(prompt.GpuSearchContext.Files);
+    }
+
+    [Fact]
+    public void Build_LeavesGpuSearchContextNull_WhenNotProvided()
+    {
+        var diff = new GitDiffPreviewResponse("repo", 1, [], "+change");
+
+        var prompt = new ReviewPromptBuilder().Build(diff, []);
+
+        Assert.Null(prompt.GpuSearchContext);
+    }
 }

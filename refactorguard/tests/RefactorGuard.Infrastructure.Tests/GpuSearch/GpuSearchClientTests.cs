@@ -55,17 +55,157 @@ public sealed class GpuSearchClientTests
         {
             results = new[]
             {
-                new { filePath = "src/App.cs", line = 10, snippet = "Task.Result", score = 0.9 }
+                new { file = "src/App.cs", lineStart = 10, snippet = "Task.Result", score = 0.9, engine = "hybrid" }
             }
         });
         var gpuSearchClient = new GpuSearchClient(client);
 
         var results = await gpuSearchClient.SearchHybridAsync(
-            new SearchHybridRequest("Task.Result", "repo", 5),
+            new SearchHybridRequest("Task.Result", null, 5),
             CancellationToken.None);
 
         Assert.Single(results);
-        Assert.Equal("src/App.cs", results[0].FilePath);
+        Assert.Equal("src/App.cs", results[0].File);
+        Assert.Equal(10, results[0].LineStart);
+        Assert.Equal("Task.Result", results[0].Snippet);
+        Assert.Equal(0.9, results[0].Score);
+        Assert.Equal("hybrid", results[0].Engine);
+    }
+
+    [Fact]
+    public async Task SearchCodeAsync_ReturnsStructuredResults()
+    {
+        var client = CreateClient(new
+        {
+            results = new[]
+            {
+                new { file = "src/UserService.cs", lineStart = 20, lineEnd = 25, snippet = "AddSingleton", score = 1.0, engine = "exact", reason = "token match" }
+            }
+        });
+        var gpuSearchClient = new GpuSearchClient(client);
+
+        var results = await gpuSearchClient.SearchCodeAsync(
+            new CodeSearchRequest("AddSingleton", 5),
+            CancellationToken.None);
+
+        Assert.Single(results);
+        Assert.Equal("src/UserService.cs", results[0].File);
+        Assert.Equal(20, results[0].LineStart);
+        Assert.Equal(25, results[0].LineEnd);
+        Assert.Equal("exact", results[0].Engine);
+        Assert.Equal("token match", results[0].Reason);
+    }
+
+    [Fact]
+    public async Task SearchSemanticAsync_ReturnsStructuredResults()
+    {
+        var client = CreateClient(new
+        {
+            results = new[]
+            {
+                new { file = "src/Auth.cs", lineStart = 5, snippet = "async Task Login", score = 0.85, engine = "semantic" }
+            }
+        });
+        var gpuSearchClient = new GpuSearchClient(client);
+
+        var results = await gpuSearchClient.SearchSemanticAsync(
+            new CodeSearchRequest("user authentication", 3),
+            CancellationToken.None);
+
+        Assert.Single(results);
+        Assert.Equal("src/Auth.cs", results[0].File);
+        Assert.Equal("semantic", results[0].Engine);
+    }
+
+    [Fact]
+    public async Task ReadBlockAsync_ReturnsBlockResponse()
+    {
+        var client = CreateClient(new
+        {
+            result = "ok",
+            file = "src/App.cs",
+            lineStart = 30,
+            lineEnd = 50,
+            content = "public class App { }",
+            language = "csharp"
+        });
+        var gpuSearchClient = new GpuSearchClient(client);
+
+        var block = await gpuSearchClient.ReadBlockAsync(
+            new ReadBlockRequest("src/App.cs", 40, 10),
+            CancellationToken.None);
+
+        Assert.Equal("ok", block.Result);
+        Assert.Equal("src/App.cs", block.File);
+        Assert.Equal(30, block.LineStart);
+        Assert.Equal(50, block.LineEnd);
+        Assert.Equal("public class App { }", block.Content);
+        Assert.Equal("csharp", block.Language);
+    }
+
+    [Fact]
+    public async Task ReadSkeletonAsync_ReturnsSkeletonResponse()
+    {
+        var client = CreateClient(new
+        {
+            result = "ok",
+            file = "src/UserService.cs",
+            content = "public class UserService { ... }",
+            matchLines = new[] { 1, 10, 20 },
+            language = "csharp"
+        });
+        var gpuSearchClient = new GpuSearchClient(client);
+
+        var skeleton = await gpuSearchClient.ReadSkeletonAsync(
+            new ReadSkeletonRequest("src/UserService.cs"),
+            CancellationToken.None);
+
+        Assert.Equal("ok", skeleton.Result);
+        Assert.Equal("src/UserService.cs", skeleton.File);
+        Assert.Contains("UserService", skeleton.Content);
+        Assert.Equal(3, skeleton.MatchLines?.Count);
+        Assert.Equal("csharp", skeleton.Language);
+    }
+
+    [Fact]
+    public async Task GetDependencyImpactAsync_ReturnsDependencyImpactResponse()
+    {
+        var client = CreateClient(new
+        {
+            result = "ok",
+            file = "src/UserService.cs",
+            impactedFiles = new[]
+            {
+                new { file = "src/AuthController.cs", hops = 1 },
+                new { file = "src/AdminController.cs", hops = 1 },
+                new { file = "src/RootController.cs", hops = 2 }
+            }
+        });
+        var gpuSearchClient = new GpuSearchClient(client);
+
+        var impact = await gpuSearchClient.GetDependencyImpactAsync(
+            new DependencyImpactRequest("src/UserService.cs"),
+            CancellationToken.None);
+
+        Assert.Equal("ok", impact.Result);
+        Assert.Equal("src/UserService.cs", impact.File);
+        Assert.Equal(3, impact.ImpactedFiles.Count);
+        Assert.Equal("src/AuthController.cs", impact.ImpactedFiles[0].File);
+        Assert.Equal(1, impact.ImpactedFiles[0].Hops);
+        Assert.Equal(2, impact.ImpactedFiles[2].Hops);
+    }
+
+    [Fact]
+    public async Task SearchHybridAsync_ReturnsEmpty_WhenResultsArrayIsEmpty()
+    {
+        var client = CreateClient(new { results = Array.Empty<object>() });
+        var gpuSearchClient = new GpuSearchClient(client);
+
+        var results = await gpuSearchClient.SearchHybridAsync(
+            new SearchHybridRequest("nothing", null, 5),
+            CancellationToken.None);
+
+        Assert.Empty(results);
     }
 
     private static HttpClient CreateClient(object response, HttpStatusCode statusCode = HttpStatusCode.OK)
@@ -88,7 +228,7 @@ public sealed class GpuSearchClientTests
             });
             return Task.FromResult(new HttpResponseMessage(statusCode)
             {
-                Content = new StringContent(json)
+                Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json")
             });
         }
     }

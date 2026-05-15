@@ -32,40 +32,54 @@ public sealed class GpuSearchStatusWorkflowTests
     private sealed class StubGpuSearchClient : IGpuSearchClient
     {
         public Task<GpuSearchHealth> GetHealthAsync(CancellationToken cancellationToken)
-        {
-            return Task.FromResult(new GpuSearchHealth("ok"));
-        }
+            => Task.FromResult(new GpuSearchHealth("ok"));
 
         public Task<GpuSearchStats> GetStatsAsync(CancellationToken cancellationToken)
-        {
-            return Task.FromResult(new GpuSearchStats("ok", "cuda", "RTX 4060", 100));
-        }
+            => Task.FromResult(new GpuSearchStats("ok", "cuda", "RTX 4060", 100));
 
-        public Task<IReadOnlyList<SearchResult>> SearchHybridAsync(
-            SearchHybridRequest request,
-            CancellationToken cancellationToken)
-        {
-            return Task.FromResult<IReadOnlyList<SearchResult>>([]);
-        }
+        public Task<IReadOnlyList<GpuSearchResult>> SearchCodeAsync(CodeSearchRequest request, CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<GpuSearchResult>>([]);
+
+        public Task<IReadOnlyList<GpuSearchResult>> SearchSemanticAsync(CodeSearchRequest request, CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<GpuSearchResult>>([]);
+
+        public Task<IReadOnlyList<GpuSearchResult>> SearchHybridAsync(SearchHybridRequest request, CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<GpuSearchResult>>([]);
+
+        public Task<ReadBlockResponse> ReadBlockAsync(ReadBlockRequest request, CancellationToken cancellationToken)
+            => Task.FromResult(new ReadBlockResponse("ok", request.Path, null, null, null, null, null));
+
+        public Task<ReadSkeletonResponse> ReadSkeletonAsync(ReadSkeletonRequest request, CancellationToken cancellationToken)
+            => Task.FromResult(new ReadSkeletonResponse("ok", request.Path, null, null, null, null));
+
+        public Task<DependencyImpactResponse> GetDependencyImpactAsync(DependencyImpactRequest request, CancellationToken cancellationToken)
+            => Task.FromResult(new DependencyImpactResponse("ok", request.Path, null, []));
     }
 
     private sealed class FailingGpuSearchClient : IGpuSearchClient
     {
         public Task<GpuSearchHealth> GetHealthAsync(CancellationToken cancellationToken)
-        {
-            throw new HttpRequestException("unavailable");
-        }
+            => throw new HttpRequestException("unavailable");
 
         public Task<GpuSearchStats> GetStatsAsync(CancellationToken cancellationToken)
-        {
-            throw new HttpRequestException("unavailable");
-        }
+            => throw new HttpRequestException("unavailable");
 
-        public Task<IReadOnlyList<SearchResult>> SearchHybridAsync(
-            SearchHybridRequest request,
-            CancellationToken cancellationToken)
-        {
-            throw new HttpRequestException("unavailable");
-        }
+        public Task<IReadOnlyList<GpuSearchResult>> SearchCodeAsync(CodeSearchRequest request, CancellationToken cancellationToken)
+            => throw new HttpRequestException("unavailable");
+
+        public Task<IReadOnlyList<GpuSearchResult>> SearchSemanticAsync(CodeSearchRequest request, CancellationToken cancellationToken)
+            => throw new HttpRequestException("unavailable");
+
+        public Task<IReadOnlyList<GpuSearchResult>> SearchHybridAsync(SearchHybridRequest request, CancellationToken cancellationToken)
+            => throw new HttpRequestException("unavailable");
+
+        public Task<ReadBlockResponse> ReadBlockAsync(ReadBlockRequest request, CancellationToken cancellationToken)
+            => throw new HttpRequestException("unavailable");
+
+        public Task<ReadSkeletonResponse> ReadSkeletonAsync(ReadSkeletonRequest request, CancellationToken cancellationToken)
+            => throw new HttpRequestException("unavailable");
+
+        public Task<DependencyImpactResponse> GetDependencyImpactAsync(DependencyImpactRequest request, CancellationToken cancellationToken)
+            => throw new HttpRequestException("unavailable");
     }
 }

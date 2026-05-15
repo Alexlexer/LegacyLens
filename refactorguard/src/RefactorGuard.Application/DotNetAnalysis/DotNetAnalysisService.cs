@@ -26,9 +26,9 @@ public sealed class DotNetAnalysisService(
             findings.AddRange(results.Select(result => new DotNetAnalysisFinding(
                 preset.Id,
                 "Review",
-                result.FilePath,
-                result.Line,
-                result.Snippet,
+                result.File,
+                result.LineStart,
+                result.Snippet ?? string.Empty,
                 preset.Rationale)));
         }
 

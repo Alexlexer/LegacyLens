@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text;
 using RefactorGuard.Application.Review;
 
 namespace RefactorGuard.Infrastructure.Llm;
@@ -38,12 +39,14 @@ public sealed class LmStudioReviewLlmProvider(
             : string.Join("\n", prompt.Findings.Select(finding =>
                 $"- {finding.Severity} {finding.RuleId} {finding.Path}: {finding.Title} - {finding.Description}"));
 
+        var gpuContext = BuildGpuContextSection(prompt.GpuSearchContext);
+
         return $"""
             Repository: {prompt.RepoPath}
 
             Deterministic findings:
             {findings}
-
+            {gpuContext}
             Git diff:
             ```diff
             {prompt.Diff}
@@ -54,6 +57,36 @@ public sealed class LmStudioReviewLlmProvider(
             2. Suggested review focus.
             3. Missing tests to consider.
             """;
+    }
+
+    private static string BuildGpuContextSection(GpuSearchReviewContext? context)
+    {
+        if (context is null || !context.WasAvailable || context.Files.Count == 0)
+            return string.Empty;
+
+        var sb = new StringBuilder();
+        sb.AppendLine();
+        sb.AppendLine("gpu-search context (factual, retrieved from the indexed repository):");
+
+        foreach (var file in context.Files)
+        {
+            sb.AppendLine($"  File: {file.FilePath}");
+
+            if (file.DependencyImpact is not null)
+                sb.AppendLine($"    Dependency impact: {file.DependencyImpact.TotalImpacted} impacted file(s)");
+
+            if (file.RelatedResults.Count > 0)
+            {
+                sb.AppendLine("    Related code:");
+                foreach (var r in file.RelatedResults.Take(3))
+                {
+                    var line = r.LineStart.HasValue ? $" L{r.LineStart}" : string.Empty;
+                    sb.AppendLine($"      - {r.File}{line}");
+                }
+            }
+        }
+
+        return sb.ToString();
     }
 
     private sealed record ChatCompletionRequest(

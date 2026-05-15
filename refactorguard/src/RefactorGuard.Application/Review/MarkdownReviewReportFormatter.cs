@@ -39,6 +39,8 @@ public sealed class MarkdownReviewReportFormatter : IReviewReportFormatter
             markdown.AppendLine($"- **{finding.Severity}** `{finding.RuleId}` on {path}: {finding.Title}. {finding.Description}");
         }
 
+        AppendGpuSearchSection(markdown, report.GpuSearchContext);
+
         if (!string.IsNullOrWhiteSpace(report.LlmSummary))
         {
             markdown.AppendLine();
@@ -48,5 +50,77 @@ public sealed class MarkdownReviewReportFormatter : IReviewReportFormatter
         }
 
         return markdown.ToString();
+    }
+
+    private static void AppendGpuSearchSection(StringBuilder markdown, GpuSearchReviewContext? context)
+    {
+        if (context is null)
+            return;
+
+        markdown.AppendLine();
+        markdown.AppendLine("## gpu-search Context");
+        markdown.AppendLine();
+
+        if (!context.WasAvailable)
+        {
+            markdown.AppendLine("gpu-search-mcp was unavailable or returned errors. Deterministic review still completed.");
+            if (!string.IsNullOrWhiteSpace(context.UnavailableReason))
+            {
+                markdown.AppendLine();
+                markdown.AppendLine($"> {context.UnavailableReason}");
+            }
+            return;
+        }
+
+        if (context.Files.Count == 0)
+        {
+            markdown.AppendLine("No files were enriched.");
+            return;
+        }
+
+        foreach (var fileCtx in context.Files)
+        {
+            markdown.AppendLine($"### `{fileCtx.FilePath}`");
+            markdown.AppendLine();
+
+            if (fileCtx.DependencyImpact is not null)
+            {
+                markdown.AppendLine($"**Dependency impact:** {fileCtx.DependencyImpact.TotalImpacted} impacted file(s)");
+                if (fileCtx.DependencyImpact.DirectImporters.Count > 0)
+                {
+                    var importers = string.Join(", ",
+                        fileCtx.DependencyImpact.DirectImporters.Take(5).Select(f => $"`{f}`"));
+                    markdown.AppendLine($"Direct importers: {importers}");
+                }
+                markdown.AppendLine();
+            }
+
+            if (fileCtx.RelatedResults.Count > 0)
+            {
+                markdown.AppendLine("**Related results:**");
+                foreach (var result in fileCtx.RelatedResults)
+                {
+                    var lineRange = result.LineStart.HasValue
+                        ? result.LineEnd.HasValue && result.LineEnd != result.LineStart
+                            ? $" L{result.LineStart}–L{result.LineEnd}"
+                            : $" L{result.LineStart}"
+                        : string.Empty;
+                    var engine = result.Engine is not null ? $" — {result.Engine}" : string.Empty;
+                    markdown.AppendLine($"- `{result.File}`{lineRange}{engine}");
+                }
+                markdown.AppendLine();
+            }
+
+            if (fileCtx.Skeleton is not null)
+            {
+                markdown.AppendLine("**Skeleton:**");
+                markdown.AppendLine();
+                var lang = fileCtx.Skeleton.Language ?? string.Empty;
+                markdown.AppendLine($"```{lang}");
+                markdown.AppendLine(fileCtx.Skeleton.Content);
+                markdown.AppendLine("```");
+                markdown.AppendLine();
+            }
+        }
     }
 }

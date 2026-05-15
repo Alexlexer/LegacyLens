@@ -1,16 +1,23 @@
 using RefactorGuard.Application.Git;
 using RefactorGuard.Application.Reports;
+using RefactorGuard.Application.Search;
 using RefactorGuard.Domain.Git;
+using RefactorGuard.Domain.Search;
 
 namespace RefactorGuard.Application.Review;
 
 public sealed class DiffReviewOrchestrator(
     IGitDiffService gitDiffService,
+    IGpuSearchClient gpuSearchClient,
     IReviewReportFormatter reportFormatter,
     IReviewPromptBuilder promptBuilder,
     IReviewLlmProvider llmProvider,
     IReportRepository reportRepository) : IReviewOrchestrator
 {
+    private const int MaxFilesToEnrich = 10;
+    private const int MaxSearchResultsPerFile = 5;
+    private const int MaxSkeletonLength = 4000;
+
     public async Task<DiffReviewReport> ReviewDiffAsync(
         DiffReviewRequest request,
         CancellationToken cancellationToken)
@@ -19,10 +26,15 @@ public sealed class DiffReviewOrchestrator(
             new GitDiffPreviewRequest(request.RepoPath),
             cancellationToken);
 
-        var findings = BuildFindings(diff);
+        var findings = new List<ReviewFinding>(BuildDeterministicFindings(diff));
+        var gpuSearchContext = await TryEnrichWithGpuSearchAsync(diff, findings, cancellationToken);
+
         var llmSummary = request.UseLlm
-            ? await llmProvider.GenerateReviewAsync(promptBuilder.Build(diff, findings), cancellationToken)
+            ? await llmProvider.GenerateReviewAsync(
+                promptBuilder.Build(diff, findings, gpuSearchContext),
+                cancellationToken)
             : null;
+
         var report = new DiffReviewReport(
             Guid.NewGuid().ToString("N"),
             diff.RepoPath,
@@ -32,17 +44,125 @@ public sealed class DiffReviewOrchestrator(
             findings,
             string.Empty,
             llmSummary,
-            request.UseLlm ? llmProvider.Name : "Deterministic");
+            request.UseLlm ? llmProvider.Name : "Deterministic",
+            gpuSearchContext);
 
-        var finalReport = report with
-        {
-            Markdown = reportFormatter.Format(report)
-        };
+        var finalReport = report with { Markdown = reportFormatter.Format(report) };
         await reportRepository.SaveAsync(finalReport, cancellationToken);
         return finalReport;
     }
 
-    private static IReadOnlyList<ReviewFinding> BuildFindings(GitDiffPreviewResponse diff)
+    private async Task<GpuSearchReviewContext> TryEnrichWithGpuSearchAsync(
+        GitDiffPreviewResponse diff,
+        List<ReviewFinding> findings,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await gpuSearchClient.GetHealthAsync(cancellationToken);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException)
+        {
+            findings.Add(new ReviewFinding(
+                "gpu-search-unavailable",
+                "Info",
+                null,
+                "gpu-search-mcp unavailable",
+                "gpu-search-mcp was not reachable. Review enrichment was skipped. Deterministic review still completed."));
+            return new GpuSearchReviewContext(false, [], ex.Message);
+        }
+
+        var fileContexts = new List<ChangedFileContext>();
+        foreach (var file in diff.Files.Take(MaxFilesToEnrich))
+        {
+            var ctx = await TryGetFileContextAsync(file.Path, cancellationToken);
+            fileContexts.Add(ctx);
+
+            if (ctx.DependencyImpact is { TotalImpacted: >= 3 })
+            {
+                var severity = ctx.DependencyImpact.TotalImpacted >= 10 ? "High" : "Medium";
+                var importerList = ctx.DependencyImpact.DirectImporters.Count > 0
+                    ? $" Direct importers: {string.Join(", ", ctx.DependencyImpact.DirectImporters.Take(5))}."
+                    : string.Empty;
+                findings.Add(new ReviewFinding(
+                    "high-impact-change",
+                    severity,
+                    file.Path,
+                    $"High-impact change ({ctx.DependencyImpact.TotalImpacted} impacted files)",
+                    $"This file is imported by {ctx.DependencyImpact.TotalImpacted} other file(s).{importerList}"));
+            }
+        }
+
+        return new GpuSearchReviewContext(true, fileContexts);
+    }
+
+    private async Task<ChangedFileContext> TryGetFileContextAsync(
+        string filePath,
+        CancellationToken cancellationToken)
+    {
+        DependencyImpactSummary? impact = null;
+        SkeletonSummary? skeleton = null;
+        var relatedResults = new List<RelatedCodeResult>();
+        string? error = null;
+
+        try
+        {
+            var impactResponse = await gpuSearchClient.GetDependencyImpactAsync(
+                new DependencyImpactRequest(filePath),
+                cancellationToken);
+
+            var directImporters = impactResponse.ImpactedFiles
+                .Where(f => f.Hops == 1)
+                .Select(f => f.File)
+                .ToList();
+            impact = new DependencyImpactSummary(impactResponse.ImpactedFiles.Count, directImporters);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        {
+            error = $"Dependency impact unavailable: {ex.Message}";
+        }
+
+        try
+        {
+            var skeletonResponse = await gpuSearchClient.ReadSkeletonAsync(
+                new ReadSkeletonRequest(filePath),
+                cancellationToken);
+
+            if (!string.IsNullOrWhiteSpace(skeletonResponse.Content))
+            {
+                var content = skeletonResponse.Content.Length > MaxSkeletonLength
+                    ? string.Concat(skeletonResponse.Content.AsSpan(0, MaxSkeletonLength), "\n[skeleton truncated]")
+                    : skeletonResponse.Content;
+                skeleton = new SkeletonSummary(content, skeletonResponse.Language);
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        {
+            error ??= $"Skeleton read unavailable: {ex.Message}";
+        }
+
+        try
+        {
+            var query = Path.GetFileNameWithoutExtension(filePath);
+            if (!string.IsNullOrWhiteSpace(query))
+            {
+                var searchResults = await gpuSearchClient.SearchHybridAsync(
+                    new SearchHybridRequest(query, null, MaxSearchResultsPerFile),
+                    cancellationToken);
+
+                relatedResults.AddRange(searchResults.Select(r =>
+                    new RelatedCodeResult(r.File, r.LineStart, r.LineEnd, r.Snippet, r.Engine, r.Score)));
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        {
+            error ??= $"Search unavailable: {ex.Message}";
+        }
+
+        return new ChangedFileContext(filePath, impact, skeleton, relatedResults, error);
+    }
+
+    private static List<ReviewFinding> BuildDeterministicFindings(GitDiffPreviewResponse diff)
     {
         var findings = new List<ReviewFinding>();
 

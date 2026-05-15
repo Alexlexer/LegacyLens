@@ -28,6 +28,15 @@ dotnet test
 dotnet format --verify-no-changes
 ```
 
+Build the frontend from `refactorguard/ui`:
+
+```bash
+npm install
+npm run build
+```
+
+The Vite build outputs static files to `src/RefactorGuard.Api/wwwroot`, which the API serves at `/`.
+
 If Python `gpu-search-mcp` is changed, also run available Python checks:
 
 ```bash
@@ -105,6 +114,14 @@ Diff review reports are saved to SQLite. The default database path is `data/refa
 ```
 
 Use `GET /api/reports`, `GET /api/reports/{id}`, and `DELETE /api/reports/{id}` to manage saved reports.
+
+## Frontend UI
+
+The minimal UI provides repository path input, diff preview, deterministic or LM Studio review, .NET preset analysis, gpu-search status, and saved report management. During UI-only development, run Vite from `refactorguard/ui`:
+
+```bash
+npm run dev
+```
 
 ## LM Studio Configuration
 

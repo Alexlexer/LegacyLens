@@ -15,7 +15,9 @@ builder.Services.AddRefactorGuardInfrastructure(builder.Configuration);
 
 var app = builder.Build();
 
-app.MapGet("/", () => Results.Redirect("/health"));
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 app.MapGet("/health", () => Results.Ok(SystemHealth.Healthy()));
 app.MapGet("/api/search/status", async (
     GpuSearchStatusWorkflow workflow,

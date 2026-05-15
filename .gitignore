@@ -7,6 +7,10 @@ AGENTS.md
 bin/
 obj/
 
+# Node / frontend
+node_modules/
+dist/
+
 # Local runtime data
 data/
 *.db

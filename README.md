@@ -25,6 +25,22 @@ refactorguard/
     RefactorGuard.Api.Tests/
 ```
 
+## Demo workflow
+
+See [docs/demo.md](docs/demo.md) for a full local walkthrough, including startup scripts, smoke checks, and troubleshooting.
+
+Quick start:
+
+```powershell
+# Windows
+.\scripts\start-demo.ps1 -RepoPath "D:\Projects\SomeRepo"
+```
+
+```bash
+# macOS / Linux
+./scripts/start-demo.sh /path/to/SomeRepo
+```
+
 ## Development
 
 Run from `refactorguard/`:

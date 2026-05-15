@@ -45,3 +45,17 @@ python -m mypy .
 5. Run checks.
 6. Commit with a conventional commit message.
 7. Push the branch and open a PR.
+
+## Diff Preview Configuration
+
+Diff preview is read-only and only works for repositories under configured allowed roots:
+
+```json
+{
+  "RefactorGuard": {
+    "AllowedRoots": ["D:\\Projects"]
+  }
+}
+```
+
+Use `POST /api/review/diff/preview` with a JSON body such as `{ "repoPath": "D:\\Projects\\ExampleRepo" }`.

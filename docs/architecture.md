@@ -36,6 +36,8 @@ Application defines interfaces such as `IGitDiffService`, `IGpuSearchClient`, `I
 5. Application builds deterministic findings or an LLM prompt.
 6. Reports are returned as structured data and Markdown.
 
+The current review workflow is deterministic and does not call an LLM. It inspects the Git diff preview and emits stable findings for empty diffs, large changes, test changes, and project/configuration changes.
+
 ## gpu-search Integration
 
 `RefactorGuard.Infrastructure` provides a typed HTTP client behind `IGpuSearchClient`. The API exposes `GET /api/search/status` to check `/health` and `/stats` from `gpu-search-mcp` without coupling endpoint code to HTTP details.

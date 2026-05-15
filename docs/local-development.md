@@ -60,6 +60,8 @@ Diff preview is read-only and only works for repositories under configured allow
 
 Use `POST /api/review/diff/preview` with a JSON body such as `{ "repoPath": "D:\\Projects\\ExampleRepo" }`.
 
+Use `POST /api/review/diff` with the same body to generate a deterministic Markdown review report. This does not call an LLM.
+
 ## gpu-search-mcp Configuration
 
 RefactorGuard expects `gpu-search-mcp` HTTP mode to be reachable through configured options:

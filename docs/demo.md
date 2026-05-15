@@ -220,3 +220,108 @@ Or run the script explicitly:
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\start-demo.ps1 -RepoPath "D:\Projects\SomeRepo"
 ```
+
+---
+
+## Integration smoke test
+
+Use the sample fixture and integration smoke script to verify that LegacyLens and gpu-search-mcp work together end-to-end, without touching any of your real repositories.
+
+### Step 1 — Prepare the sample diff
+
+The fixture repo lives at `test-fixtures/sample-dotnet-repo`. Run the prepare script to initialise its Git repo and leave a deterministic dirty change in `src/UserService.cs`:
+
+**Windows:**
+
+```powershell
+.\scripts\prepare-sample-diff.ps1
+```
+
+**macOS / Linux:**
+
+```bash
+./scripts/prepare-sample-diff.sh
+```
+
+The script is idempotent — repeated runs reset the fixture to a known state and re-apply the same change.
+
+### Step 2 — Configure allowed roots
+
+Ensure `test-fixtures` (or its parent) is in `AllowedRoots` in `refactorguard/appsettings.Local.json`:
+
+```json
+{
+  "LegacyLens": {
+    "AllowedRoots": ["D:\\Projects\\LegacyLens\\test-fixtures"]
+  }
+}
+```
+
+Adjust the path to match where you cloned the repository.
+
+### Step 3 — Start gpu-search-mcp (Terminal 1)
+
+```text
+gpu-search-mcp --directory ./test-fixtures/sample-dotnet-repo --http --port 8765
+```
+
+### Step 4 — Start LegacyLens (Terminal 2)
+
+```bash
+cd refactorguard
+dotnet run --project src/RefactorGuard.Api
+```
+
+### Step 5 — Run the integration smoke script (Terminal 3)
+
+**Windows:**
+
+```powershell
+.\scripts\integration-smoke.ps1 -RepoPath "D:\Projects\LegacyLens\test-fixtures\sample-dotnet-repo"
+```
+
+**macOS / Linux:**
+
+```bash
+./scripts/integration-smoke.sh
+```
+
+### Expected output
+
+```text
+============================================
+  LegacyLens Integration Smoke Test
+============================================
+
+--- Health checks ---
+  [PASS] gpu-search /health
+  [PASS] LegacyLens /health
+
+--- Search status ---
+  [PASS] GET /api/search/status
+         gpu-search available: True
+
+--- Diff preview ---
+  [PASS] POST /api/review/diff/preview
+         Changed files: 1
+
+--- Diff review (deterministic) ---
+  [PASS] POST /api/review/diff
+         Report ID: <uuid>
+  [PASS] gpu-search context section present in report
+
+--- Saved reports ---
+  [PASS] GET /api/reports
+
+============================================
+  Results: 7 passed, 0 failed
+============================================
+```
+
+If gpu-search-mcp is not running, the `[PASS]` for the gpu-search context check will instead read:
+
+```text
+  [PASS] gpu-search graceful fallback finding present in report
+```
+
+The overall smoke test still passes in that case — the review degrades gracefully.

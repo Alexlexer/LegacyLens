@@ -1,10 +1,14 @@
 # LegacyLens
 
-LegacyLens contains the initial RefactorGuard implementation: a local .NET service for AI-assisted review of Git diffs and legacy .NET code.
+LegacyLens is a local AI-assisted review and legacy .NET analysis tool powered by gpu-search-mcp.
+
+## Naming note
+
+LegacyLens is the product and repository name. Some internal .NET projects and namespaces still use the `RefactorGuard` prefix from the original bootstrap (`RefactorGuard.Api`, `RefactorGuard.Application`, etc.). These are implementation details and may be renamed in a later refactor.
 
 ## Current Status
 
-The repository now includes the RefactorGuard solution skeleton, layered projects, test projects, and CI configuration. Runtime review features will be added in focused follow-up PRs.
+The repository includes the full .NET solution, layered projects, test projects, CI configuration, a minimal Vite review dashboard, and SQLite report persistence.
 
 ## Structure
 
@@ -103,7 +107,7 @@ Terminal 1 — start gpu-search-mcp:
 gpu-search-mcp --directory D:\Projects\SomeRepo --http --port 8765
 ```
 
-Terminal 2 — start RefactorGuard:
+Terminal 2 — start LegacyLens:
 
 ```text
 dotnet run --project src/RefactorGuard.Api
@@ -127,7 +131,7 @@ Configure allowed repository roots before using diff preview:
 
 ```json
 {
-  "RefactorGuard": {
+  "LegacyLens": {
     "AllowedRoots": ["D:\\Projects"],
     "GpuSearch": {
       "BaseUrl": "http://127.0.0.1:8765",
@@ -142,8 +146,10 @@ Configure allowed repository roots before using diff preview:
       "TimeoutSeconds": 60
     },
     "Persistence": {
-      "DatabasePath": "data/refactorguard.db"
+      "DatabasePath": "data/legacylens.db"
     }
   }
 }
 ```
+
+The `RefactorGuard` config section is also accepted for backward compatibility.

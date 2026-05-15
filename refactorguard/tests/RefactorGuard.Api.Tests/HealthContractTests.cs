@@ -10,6 +10,6 @@ public sealed class HealthContractTests
         var health = SystemHealth.Healthy();
 
         Assert.Equal("ok", health.Status);
-        Assert.Equal("RefactorGuard", health.Service);
+        Assert.Equal("LegacyLens", health.Service);
     }
 }

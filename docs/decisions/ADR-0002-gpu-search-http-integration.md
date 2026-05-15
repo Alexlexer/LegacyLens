@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-RefactorGuard needs code search, semantic search, block reading, skeleton reading, and dependency impact from `gpu-search-mcp`.
+LegacyLens needs code search, semantic search, block reading, skeleton reading, and dependency impact from `gpu-search-mcp`.
 
 ## Decision
 
@@ -14,4 +14,4 @@ Integrate with `gpu-search-mcp` through a typed HTTP client behind an `IGpuSearc
 
 ## Consequences
 
-RefactorGuard remains independent from the search implementation and can mock search behavior in tests. HTTP configuration, health checks, and timeout handling must be explicit.
+LegacyLens remains independent from the search implementation and can mock search behavior in tests. HTTP configuration, health checks, and timeout handling must be explicit.

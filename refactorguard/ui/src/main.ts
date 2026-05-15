@@ -65,7 +65,7 @@ app.innerHTML = `
     <section class="hero panel">
       <div>
         <p class="eyebrow">Local legacy .NET review</p>
-        <h1>RefactorGuard</h1>
+        <h1>LegacyLens</h1>
         <p class="muted">Flat, local-first review workflow powered by Git diffs, gpu-search-mcp, and optional LM Studio summaries.</p>
       </div>
       <button id="statusButton" class="ghost">Check gpu-search</button>

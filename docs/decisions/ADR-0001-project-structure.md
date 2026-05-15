@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-RefactorGuard needs clear boundaries between HTTP endpoints, review orchestration, domain models, and infrastructure integrations.
+LegacyLens needs clear boundaries between HTTP endpoints, review orchestration, domain models, and infrastructure integrations.
 
 ## Decision
 

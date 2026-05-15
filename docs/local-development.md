@@ -88,6 +88,8 @@ RefactorGuard expects `gpu-search-mcp` HTTP mode to be reachable through configu
 
 Use `GET /api/search/status` to verify connectivity without running a review.
 
+Use `POST /api/dotnet/analyze` to run .NET analysis presets through `gpu-search-mcp`. Supported presets include `async-blocking`, `broad-exceptions`, `entity-framework-n-plus-one`, and `nullable-suppression`.
+
 ## LM Studio Configuration
 
 LM Studio is optional. Deterministic review remains the safe default unless `useLlm` is true and the provider is configured for LM Studio:

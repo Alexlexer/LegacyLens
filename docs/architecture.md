@@ -44,6 +44,8 @@ When requested, the review workflow can enrich the deterministic report through 
 
 `RefactorGuard.Infrastructure` provides a typed HTTP client behind `IGpuSearchClient`. The API exposes `GET /api/search/status` to check `/health` and `/stats` from `gpu-search-mcp` without coupling endpoint code to HTTP details.
 
+`POST /api/dotnet/analyze` uses the same client to run preset hybrid searches for common .NET review risks. Preset definitions live in Application so they remain testable and independent of HTTP details.
+
 ## Design Rules
 
 Keep endpoints thin, workflows testable, prompt construction isolated, and provider-specific code behind interfaces. Do not put business logic in controllers or minimal API handlers.

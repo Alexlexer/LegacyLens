@@ -6,6 +6,8 @@ RefactorGuard defaults to read-only analysis. It must not modify source reposito
 
 All repository paths must be validated against configured allowed roots. Reject paths outside allowed roots, path traversal attempts, and ambiguous relative paths before any Git, search, or filesystem operation.
 
+Diff preview uses this model now. If `RefactorGuard:AllowedRoots` is empty, repository diff requests are rejected instead of falling back to broad filesystem access.
+
 ## Secrets and Sensitive Data
 
 Never commit secrets, `.env` files, private keys, local credentials, or machine-specific absolute paths. Logs and errors must not expose environment variables, API keys, full `.env` contents, private key material, or full source file content.

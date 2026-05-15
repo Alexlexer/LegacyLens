@@ -43,3 +43,22 @@ Health check:
 ```text
 GET /health
 ```
+
+Preview the current working-tree diff for an allowed repository:
+
+```text
+POST /api/review/diff/preview
+Content-Type: application/json
+
+{ "repoPath": "D:\\Projects\\SomeRepo" }
+```
+
+Configure allowed repository roots before using diff preview:
+
+```json
+{
+  "RefactorGuard": {
+    "AllowedRoots": ["D:\\Projects"]
+  }
+}
+```

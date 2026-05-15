@@ -38,7 +38,17 @@ Run the API locally:
 dotnet run --project src/RefactorGuard.Api
 ```
 
-Health check:
+Build the minimalist Vite UI before serving it from the API:
+
+```bash
+cd ui
+npm install
+npm run build
+cd ..
+dotnet run --project src/RefactorGuard.Api
+```
+
+Open the UI at the API root URL shown by `dotnet run`. Health check:
 
 ```text
 GET /health

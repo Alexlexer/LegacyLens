@@ -50,6 +50,10 @@ When requested, the review workflow can enrich the deterministic report through 
 
 `IReportRepository` is defined in Application. Infrastructure provides a SQLite implementation that stores full review reports as JSON plus indexed summary fields for listing. The review orchestrator saves each generated report.
 
+## Frontend
+
+The first UI is a minimal Vite app under `refactorguard/ui`. Its production build writes static assets into `RefactorGuard.Api/wwwroot`, and the API serves them with ASP.NET Core static file middleware.
+
 ## Design Rules
 
 Keep endpoints thin, workflows testable, prompt construction isolated, and provider-specific code behind interfaces. Do not put business logic in controllers or minimal API handlers.

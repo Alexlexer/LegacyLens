@@ -24,3 +24,6 @@ data/
 
 # Local config overrides (copied from *.example.json — must not be committed)
 appsettings.Local.json
+
+# Test fixture Git repos (created at runtime by prepare-sample-diff scripts)
+test-fixtures/sample-dotnet-repo/.git/

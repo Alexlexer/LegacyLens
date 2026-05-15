@@ -21,3 +21,6 @@ data/
 .vs/
 *.user
 *.suo
+
+# Local config overrides (copied from *.example.json — must not be committed)
+appsettings.Local.json

@@ -36,6 +36,10 @@ Application defines interfaces such as `IGitDiffService`, `IGpuSearchClient`, `I
 5. Application builds deterministic findings or an LLM prompt.
 6. Reports are returned as structured data and Markdown.
 
+## gpu-search Integration
+
+`RefactorGuard.Infrastructure` provides a typed HTTP client behind `IGpuSearchClient`. The API exposes `GET /api/search/status` to check `/health` and `/stats` from `gpu-search-mcp` without coupling endpoint code to HTTP details.
+
 ## Design Rules
 
 Keep endpoints thin, workflows testable, prompt construction isolated, and provider-specific code behind interfaces. Do not put business logic in controllers or minimal API handlers.

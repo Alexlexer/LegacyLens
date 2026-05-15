@@ -1,7 +1,9 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using RefactorGuard.Application.Git;
+using RefactorGuard.Application.Search;
 using RefactorGuard.Infrastructure.Git;
+using RefactorGuard.Infrastructure.GpuSearch;
 using RefactorGuard.Infrastructure.Security;
 
 namespace RefactorGuard.Infrastructure;
@@ -16,6 +18,19 @@ public static class DependencyInjection
         services.AddSingleton<IRepoPathValidator>(new RepoPathValidator(
             configuration.GetSection("RefactorGuard:AllowedRoots").Get<string[]>() ?? []));
         services.AddScoped<IGitDiffService, GitDiffService>();
+        services.AddOptions<GpuSearchOptions>()
+            .Bind(configuration.GetSection(GpuSearchOptions.SectionName))
+            .ValidateDataAnnotations()
+            .Validate(options => options.BaseUrl.IsAbsoluteUri, "GpuSearch BaseUrl must be absolute.")
+            .ValidateOnStart();
+        services.AddHttpClient<IGpuSearchClient, GpuSearchClient>((serviceProvider, client) =>
+        {
+            var options = serviceProvider
+                .GetRequiredService<Microsoft.Extensions.Options.IOptions<GpuSearchOptions>>()
+                .Value;
+            client.BaseAddress = options.BaseUrl;
+            client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
+        });
         return services;
     }
 }

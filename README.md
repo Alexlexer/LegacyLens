@@ -44,6 +44,12 @@ Health check:
 GET /health
 ```
 
+Check `gpu-search-mcp` availability:
+
+```text
+GET /api/search/status
+```
+
 Preview the current working-tree diff for an allowed repository:
 
 ```text
@@ -58,7 +64,11 @@ Configure allowed repository roots before using diff preview:
 ```json
 {
   "RefactorGuard": {
-    "AllowedRoots": ["D:\\Projects"]
+    "AllowedRoots": ["D:\\Projects"],
+    "GpuSearch": {
+      "BaseUrl": "http://127.0.0.1:8765",
+      "TimeoutSeconds": 10
+    }
   }
 }
 ```

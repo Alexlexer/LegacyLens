@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using RefactorGuard.Domain.Search;
 using RefactorGuard.Infrastructure.GpuSearch;
 
 namespace RefactorGuard.Infrastructure.Tests.GpuSearch;
@@ -45,6 +46,26 @@ public sealed class GpuSearchClientTests
 
         await Assert.ThrowsAsync<HttpRequestException>(() =>
             gpuSearchClient.GetHealthAsync(CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task SearchHybridAsync_ReturnsWrappedResults()
+    {
+        var client = CreateClient(new
+        {
+            results = new[]
+            {
+                new { filePath = "src/App.cs", line = 10, snippet = "Task.Result", score = 0.9 }
+            }
+        });
+        var gpuSearchClient = new GpuSearchClient(client);
+
+        var results = await gpuSearchClient.SearchHybridAsync(
+            new SearchHybridRequest("Task.Result", "repo", 5),
+            CancellationToken.None);
+
+        Assert.Single(results);
+        Assert.Equal("src/App.cs", results[0].FilePath);
     }
 
     private static HttpClient CreateClient(object response, HttpStatusCode statusCode = HttpStatusCode.OK)

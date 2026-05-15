@@ -40,6 +40,13 @@ public sealed class GpuSearchStatusWorkflowTests
         {
             return Task.FromResult(new GpuSearchStats("ok", "cuda", "RTX 4060", 100));
         }
+
+        public Task<IReadOnlyList<SearchResult>> SearchHybridAsync(
+            SearchHybridRequest request,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<SearchResult>>([]);
+        }
     }
 
     private sealed class FailingGpuSearchClient : IGpuSearchClient
@@ -50,6 +57,13 @@ public sealed class GpuSearchStatusWorkflowTests
         }
 
         public Task<GpuSearchStats> GetStatsAsync(CancellationToken cancellationToken)
+        {
+            throw new HttpRequestException("unavailable");
+        }
+
+        public Task<IReadOnlyList<SearchResult>> SearchHybridAsync(
+            SearchHybridRequest request,
+            CancellationToken cancellationToken)
         {
             throw new HttpRequestException("unavailable");
         }

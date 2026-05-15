@@ -18,6 +18,8 @@ LLM providers must be explicit configuration choices. When using an external LLM
 
 LM Studio support targets a local OpenAI-compatible endpoint. Treat it as sensitive because diff snippets are sent to the configured server whenever `useLlm` is true.
 
+.NET preset analysis sends preset query text and optional repository path to the configured `gpu-search-mcp` endpoint. It does not modify repositories.
+
 ## Network Exposure
 
 Local services should bind to `127.0.0.1` by default. If remote access is needed, prefer a private network such as Tailscale and document the exposure clearly.

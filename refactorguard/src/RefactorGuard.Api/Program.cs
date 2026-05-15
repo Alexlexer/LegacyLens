@@ -1,4 +1,5 @@
 using RefactorGuard.Application;
+using RefactorGuard.Application.DotNetAnalysis;
 using RefactorGuard.Application.Git;
 using RefactorGuard.Application.Review;
 using RefactorGuard.Application.Search;
@@ -21,6 +22,33 @@ app.MapGet("/api/search/status", async (
 {
     var status = await workflow.GetStatusAsync(cancellationToken);
     return Results.Ok(status);
+});
+app.MapPost("/api/dotnet/analyze", async (
+    DotNetAnalysisRequest request,
+    DotNetAnalysisService analysisService,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var response = await analysisService.AnalyzeAsync(request, cancellationToken);
+        return Results.Ok(response);
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new ProblemDetailsResponse(
+            "https://refactorguard.local/errors/invalid-dotnet-analysis-request",
+            "Invalid .NET analysis request",
+            StatusCodes.Status400BadRequest,
+            ex.Message));
+    }
+    catch (HttpRequestException ex)
+    {
+        return Results.BadRequest(new ProblemDetailsResponse(
+            "https://refactorguard.local/errors/gpu-search-unavailable",
+            "gpu-search-mcp unavailable",
+            StatusCodes.Status400BadRequest,
+            ex.Message));
+    }
 });
 app.MapPost("/api/review/diff/preview", async (
     GitDiffPreviewRequest request,

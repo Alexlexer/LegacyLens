@@ -50,6 +50,21 @@ Check `gpu-search-mcp` availability:
 GET /api/search/status
 ```
 
+Run .NET preset analysis through `gpu-search-mcp`:
+
+```text
+POST /api/dotnet/analyze
+Content-Type: application/json
+
+{
+  "repoPath": "D:\\Projects\\SomeRepo",
+  "presets": ["async-blocking", "nullable-suppression"],
+  "limitPerPreset": 10
+}
+```
+
+If `presets` is omitted, all built-in .NET presets run.
+
 Preview the current working-tree diff for an allowed repository:
 
 ```text

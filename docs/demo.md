@@ -118,8 +118,10 @@ Click **Preview diff**. LegacyLens calls `git diff HEAD` on the repository and s
 Click **Run review**. LegacyLens generates a Markdown report with:
 
 - Deterministic findings (empty diff, large change, test changes, config changes)
-- gpu-search context: dependency impact, related code, and file skeletons for each changed file
+- gpu-search context: dependency impact with confidence/analysis-mode metadata, related code, and file skeletons for each changed file
 - An `Info` finding if gpu-search-mcp was not reachable
+
+> **Dependency impact is advisory.** gpu-search-mcp analyses imports and type/name heuristics — it is not compiler-accurate. Confidence, analysis mode, warnings, and limitations are shown in the report when provided by gpu-search-mcp.
 
 The report is saved to SQLite and appears in the **Saved reports** panel.
 

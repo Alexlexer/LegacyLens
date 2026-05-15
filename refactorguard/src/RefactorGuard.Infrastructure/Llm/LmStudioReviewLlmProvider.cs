@@ -66,14 +66,33 @@ public sealed class LmStudioReviewLlmProvider(
 
         var sb = new StringBuilder();
         sb.AppendLine();
-        sb.AppendLine("gpu-search context (factual, retrieved from the indexed repository):");
+        sb.AppendLine("gpu-search context (advisory — retrieved via heuristic index, not compiler-accurate):");
+        sb.AppendLine("IMPORTANT: Dependency impact data is provided by gpu-search-mcp using import/type/name heuristics.");
+        sb.AppendLine("Do not treat impacted file counts or importer lists as compiler-verified proof. Treat them as advisory signals.");
 
         foreach (var file in context.Files)
         {
             sb.AppendLine($"  File: {file.FilePath}");
 
             if (file.DependencyImpact is not null)
-                sb.AppendLine($"    Dependency impact: {file.DependencyImpact.TotalImpacted} impacted file(s)");
+            {
+                var di = file.DependencyImpact;
+                sb.AppendLine($"    Dependency impact: {di.TotalImpacted} impacted file(s)");
+
+                if (di.Confidence is not null)
+                    sb.AppendLine($"    Confidence: {di.Confidence}");
+
+                if (di.AnalysisMode is not null)
+                    sb.AppendLine($"    Analysis mode: {di.AnalysisMode} (advisory, not Roslyn-accurate)");
+
+                var warnings = di.Warnings ?? [];
+                foreach (var warning in warnings)
+                    sb.AppendLine($"    Warning: {warning}");
+
+                var limitations = di.Limitations ?? [];
+                foreach (var limitation in limitations)
+                    sb.AppendLine($"    Limitation: {limitation}");
+            }
 
             if (file.RelatedResults.Count > 0)
             {

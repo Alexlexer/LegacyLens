@@ -53,7 +53,7 @@ public sealed class MarkdownReviewReportFormatterTests
 
         Assert.Contains("gpu-search Context", markdown);
         Assert.Contains("src/UserService.cs", markdown);
-        Assert.Contains("3 impacted file(s)", markdown);
+        Assert.Contains("Impacted files: 3", markdown);
         Assert.Contains("src/AuthController.cs", markdown);
         Assert.Contains("src/IUserService.cs", markdown);
         Assert.Contains("UserService", markdown);
@@ -95,5 +95,100 @@ public sealed class MarkdownReviewReportFormatterTests
         var markdown = new MarkdownReviewReportFormatter().Format(report);
 
         Assert.DoesNotContain("gpu-search Context", markdown);
+    }
+
+    [Fact]
+    public void Format_ShowsConfidenceAndAnalysisMode_WhenPresent()
+    {
+        var context = new GpuSearchReviewContext(
+            true,
+            [
+                new ChangedFileContext(
+                    "src/UserService.cs",
+                    new DependencyImpactSummary(
+                        2,
+                        ["src/AuthController.cs"],
+                        Confidence: "medium",
+                        AnalysisMode: "heuristic"),
+                    null,
+                    [])
+            ]);
+        var report = new DiffReviewReport(
+            "report-5",
+            "repo",
+            DateTimeOffset.UnixEpoch,
+            1,
+            [new GitDiffFile("src/UserService.cs", "M", 5, 1)],
+            [],
+            string.Empty,
+            GpuSearchContext: context);
+
+        var markdown = new MarkdownReviewReportFormatter().Format(report);
+
+        Assert.Contains("Confidence: medium", markdown);
+        Assert.Contains("Analysis mode: heuristic", markdown);
+    }
+
+    [Fact]
+    public void Format_ShowsWarningsAndLimitations_WhenPresent()
+    {
+        var context = new GpuSearchReviewContext(
+            true,
+            [
+                new ChangedFileContext(
+                    "src/UserService.cs",
+                    new DependencyImpactSummary(
+                        0,
+                        [],
+                        Confidence: "low",
+                        AnalysisMode: "heuristic",
+                        Limitations: ["C# analysis does not use Roslyn.", "Dynamic dispatch not tracked."],
+                        Warnings: ["file not present in graph"]),
+                    null,
+                    [])
+            ]);
+        var report = new DiffReviewReport(
+            "report-6",
+            "repo",
+            DateTimeOffset.UnixEpoch,
+            1,
+            [new GitDiffFile("src/UserService.cs", "M", 2, 0)],
+            [],
+            string.Empty,
+            GpuSearchContext: context);
+
+        var markdown = new MarkdownReviewReportFormatter().Format(report);
+
+        Assert.Contains("Warning: file not present in graph", markdown);
+        Assert.Contains("C# analysis does not use Roslyn.", markdown);
+        Assert.Contains("Dynamic dispatch not tracked.", markdown);
+        Assert.Contains("advisory only", markdown);
+    }
+
+    [Fact]
+    public void Format_OmitsLimitationsBlock_WhenLimitationsAbsent()
+    {
+        var context = new GpuSearchReviewContext(
+            true,
+            [
+                new ChangedFileContext(
+                    "src/UserService.cs",
+                    new DependencyImpactSummary(1, ["src/Controller.cs"]),
+                    null,
+                    [])
+            ]);
+        var report = new DiffReviewReport(
+            "report-7",
+            "repo",
+            DateTimeOffset.UnixEpoch,
+            1,
+            [new GitDiffFile("src/UserService.cs", "M", 2, 0)],
+            [],
+            string.Empty,
+            GpuSearchContext: context);
+
+        var markdown = new MarkdownReviewReportFormatter().Format(report);
+
+        Assert.DoesNotContain("limitations", markdown, StringComparison.OrdinalIgnoreCase);
     }
 }

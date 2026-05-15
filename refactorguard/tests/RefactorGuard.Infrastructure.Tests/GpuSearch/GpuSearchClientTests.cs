@@ -208,6 +208,80 @@ public sealed class GpuSearchClientTests
         Assert.Empty(results);
     }
 
+    [Fact]
+    public async Task GetDependencyImpactAsync_ParsesConfidenceAndAnalysisMode()
+    {
+        var client = CreateClient(new
+        {
+            result = "ok",
+            file = "src/UserService.cs",
+            confidence = "medium",
+            analysisMode = "heuristic",
+            impactedFiles = new[]
+            {
+                new { file = "src/AuthController.cs", hops = 1 }
+            }
+        });
+        var gpuSearchClient = new GpuSearchClient(client);
+
+        var impact = await gpuSearchClient.GetDependencyImpactAsync(
+            new DependencyImpactRequest("src/UserService.cs"),
+            CancellationToken.None);
+
+        Assert.Equal("medium", impact.Confidence);
+        Assert.Equal("heuristic", impact.AnalysisMode);
+    }
+
+    [Fact]
+    public async Task GetDependencyImpactAsync_ParsesLimitationsAndWarnings()
+    {
+        var client = CreateClient(new
+        {
+            result = "ok",
+            file = "src/UserService.cs",
+            confidence = "low",
+            analysisMode = "heuristic",
+            limitations = new[] { "C# analysis does not use Roslyn.", "Dynamic dispatch not tracked." },
+            warnings = new[] { "file not present in graph" },
+            impactedFiles = Array.Empty<object>()
+        });
+        var gpuSearchClient = new GpuSearchClient(client);
+
+        var impact = await gpuSearchClient.GetDependencyImpactAsync(
+            new DependencyImpactRequest("src/UserService.cs"),
+            CancellationToken.None);
+
+        Assert.Equal(2, impact.Limitations?.Count);
+        Assert.Equal("C# analysis does not use Roslyn.", impact.Limitations![0]);
+        Assert.Single(impact.Warnings!);
+        Assert.Equal("file not present in graph", impact.Warnings![0]);
+    }
+
+    [Fact]
+    public async Task GetDependencyImpactAsync_HandlesAbsentMetadataFields_Safely()
+    {
+        var client = CreateClient(new
+        {
+            result = "ok",
+            file = "src/UserService.cs",
+            impactedFiles = new[]
+            {
+                new { file = "src/AuthController.cs", hops = 1 }
+            }
+        });
+        var gpuSearchClient = new GpuSearchClient(client);
+
+        var impact = await gpuSearchClient.GetDependencyImpactAsync(
+            new DependencyImpactRequest("src/UserService.cs"),
+            CancellationToken.None);
+
+        Assert.Null(impact.Confidence);
+        Assert.Null(impact.AnalysisMode);
+        Assert.Null(impact.Limitations);
+        Assert.Null(impact.Warnings);
+        Assert.Single(impact.ImpactedFiles);
+    }
+
     private static HttpClient CreateClient(object response, HttpStatusCode statusCode = HttpStatusCode.OK)
     {
         return new HttpClient(new StubHandler(response, statusCode))

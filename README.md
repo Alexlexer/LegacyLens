@@ -113,7 +113,7 @@ Content-Type: application/json
 { "repoPath": "D:\\Projects\\SomeRepo" }
 ```
 
-When `gpu-search-mcp` is running, the report includes dependency impact, file skeletons, and related search results for each changed file. If gpu-search-mcp is not running, the review still completes with a deterministic report and adds an `Info` finding noting the unavailability.
+When `gpu-search-mcp` is running, the report includes dependency impact (with confidence, analysis mode, warnings, and limitations when provided), file skeletons, and related search results for each changed file. Dependency impact is advisory — gpu-search-mcp uses import/type/name heuristics, not a compiler. If gpu-search-mcp is not running, the review still completes with a deterministic report and adds an `Info` finding noting the unavailability.
 
 Two-process workflow (full enrichment):
 

@@ -20,6 +20,8 @@ LM Studio support targets a local OpenAI-compatible endpoint. Treat it as sensit
 
 .NET preset analysis sends preset query text and optional repository path to the configured `gpu-search-mcp` endpoint. It does not modify repositories.
 
+Saved reports may contain file paths, snippets, deterministic findings, and optional LLM summaries. Store the SQLite database in a local, non-synced location for sensitive repositories and do not commit `data/` or `*.db` files.
+
 ## Network Exposure
 
 Local services should bind to `127.0.0.1` by default. If remote access is needed, prefer a private network such as Tailscale and document the exposure clearly.

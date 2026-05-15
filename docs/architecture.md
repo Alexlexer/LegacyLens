@@ -46,6 +46,10 @@ When requested, the review workflow can enrich the deterministic report through 
 
 `POST /api/dotnet/analyze` uses the same client to run preset hybrid searches for common .NET review risks. Preset definitions live in Application so they remain testable and independent of HTTP details.
 
+## Report Persistence
+
+`IReportRepository` is defined in Application. Infrastructure provides a SQLite implementation that stores full review reports as JSON plus indexed summary fields for listing. The review orchestrator saves each generated report.
+
 ## Design Rules
 
 Keep endpoints thin, workflows testable, prompt construction isolated, and provider-specific code behind interfaces. Do not put business logic in controllers or minimal API handlers.

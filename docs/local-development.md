@@ -90,6 +90,22 @@ Use `GET /api/search/status` to verify connectivity without running a review.
 
 Use `POST /api/dotnet/analyze` to run .NET analysis presets through `gpu-search-mcp`. Supported presets include `async-blocking`, `broad-exceptions`, `entity-framework-n-plus-one`, and `nullable-suppression`.
 
+## Report Persistence
+
+Diff review reports are saved to SQLite. The default database path is `data/refactorguard.db` relative to the API working directory:
+
+```json
+{
+  "RefactorGuard": {
+    "Persistence": {
+      "DatabasePath": "data/refactorguard.db"
+    }
+  }
+}
+```
+
+Use `GET /api/reports`, `GET /api/reports/{id}`, and `DELETE /api/reports/{id}` to manage saved reports.
+
 ## LM Studio Configuration
 
 LM Studio is optional. Deterministic review remains the safe default unless `useLlm` is true and the provider is configured for LM Studio:

@@ -1,6 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using RefactorGuard.Application.DotNetAnalysis;
 using RefactorGuard.Application.Git;
+using RefactorGuard.Application.Reports;
 using RefactorGuard.Application.Review;
 using RefactorGuard.Application.Search;
 
@@ -17,6 +19,7 @@ public static class DependencyInjection
         services.AddScoped<IReviewOrchestrator, DiffReviewOrchestrator>();
         services.AddSingleton<IReviewReportFormatter, MarkdownReviewReportFormatter>();
         services.AddSingleton<IReviewPromptBuilder, ReviewPromptBuilder>();
+        services.TryAddScoped<IReportRepository, NullReportRepository>();
         return services;
     }
 }

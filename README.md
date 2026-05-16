@@ -27,7 +27,9 @@ LegacyLens/
 
 ## Demo workflow
 
-See [docs/demo.md](docs/demo.md) for a full local walkthrough, including startup scripts, smoke checks, and troubleshooting.
+See [docs/demo-alpha.md](docs/demo-alpha.md) for the complete alpha demo checklist (BlogEngine.NET, gpu-search-mcp + LegacyLens + Ollama flow, troubleshooting).
+
+See [docs/demo.md](docs/demo.md) for the extended local walkthrough with startup scripts, smoke checks, and integration smoke test.
 
 Quick start:
 
@@ -41,9 +43,19 @@ Quick start:
 ./scripts/start-demo.sh /path/to/SomeRepo
 ```
 
+## Documentation
+
+| Document | Description |
+|---|---|
+| [docs/demo-alpha.md](docs/demo-alpha.md) | Alpha demo checklist — BlogEngine.NET end-to-end walkthrough |
+| [docs/release-readiness.md](docs/release-readiness.md) | Pre-release validation checklist |
+| [docs/architecture.md](docs/architecture.md) | Layered architecture and design rules |
+| [docs/demo.md](docs/demo.md) | Extended local demo with smoke checks |
+| [docs/local-development.md](docs/local-development.md) | Dev setup and configuration reference |
+
 ## Development
 
-Run from `LegacyLens/`:
+Run from `legacylens/`:
 
 ```bash
 dotnet restore

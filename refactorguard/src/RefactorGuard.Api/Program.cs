@@ -54,6 +54,35 @@ app.MapPost("/api/dotnet/analyze", async (
             ex.Message));
     }
 });
+app.MapPost("/api/dotnet/di/analyze", async (
+    DependencyInjectionAnalysisRequest request,
+    IRepoPathValidator repoPathValidator,
+    IRoslynDependencyInjectionAnalyzer diAnalyzer,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var repoPath = repoPathValidator.Validate(request.RepoPath ?? string.Empty);
+        var result = await diAnalyzer.AnalyzeAsync(repoPath, cancellationToken);
+        return Results.Ok(result);
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new ProblemDetailsResponse(
+            "https://refactorguard.local/errors/invalid-di-analysis-request",
+            "Invalid DI analysis request",
+            StatusCodes.Status400BadRequest,
+            ex.Message));
+    }
+    catch (UnauthorizedAccessException ex)
+    {
+        return Results.BadRequest(new ProblemDetailsResponse(
+            "https://refactorguard.local/errors/invalid-repo-path",
+            "Invalid repository path",
+            StatusCodes.Status400BadRequest,
+            ex.Message));
+    }
+});
 app.MapPost("/api/dotnet/workspace/scan", async (
     DotNetWorkspaceScanRequest request,
     IRepoPathValidator repoPathValidator,

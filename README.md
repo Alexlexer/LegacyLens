@@ -80,6 +80,23 @@ Check `gpu-search-mcp` availability:
 GET /api/search/status
 ```
 
+Run Roslyn-based dependency injection analysis:
+
+```text
+POST /api/dotnet/di/analyze
+Content-Type: application/json
+
+{ "repoPath": "D:\\Projects\\SomeRepo" }
+```
+
+Returns `DependencyInjectionAnalysisResult` with:
+- `registrations` — all detected `IServiceCollection` registrations with lifetime and type information.
+- `constructorDependencies` — constructor parameters extracted from public constructors.
+- `findings` — advisory findings: `multiple-registrations`, `singleton-depends-on-scoped`, `concrete-type-injection`, `missing-registration-candidate`.
+- `workspacePath` / `workspaceKind` — resolved workspace.
+
+DI analysis is static analysis only — no code is executed. Requires a `.sln`, `.slnx`, or `.csproj` discoverable from the repository root and a local .NET SDK.
+
 Run .NET preset analysis through `gpu-search-mcp`:
 
 ```text

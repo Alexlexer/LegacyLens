@@ -175,6 +175,43 @@ type DotNetAnalysis = {
   findings?: DotNetFinding[];
 };
 
+type ServiceRegistration = {
+  serviceType?: string | null;
+  implementationType?: string | null;
+  lifetime?: string;
+  filePath?: string;
+  line?: number;
+  registrationExpression?: string;
+  projectName?: string;
+};
+
+type ConstructorDependency = {
+  containingType?: string;
+  dependencyType?: string;
+  filePath?: string;
+  line?: number;
+  projectName?: string;
+};
+
+type DiAnalysisFinding = {
+  severity?: string;
+  code?: string;
+  message?: string;
+  filePath?: string | null;
+  line?: number | null;
+};
+
+type DiAnalysisResult = {
+  success?: boolean;
+  workspacePath?: string | null;
+  workspaceKind?: string | null;
+  registrations?: ServiceRegistration[] | null;
+  constructorDependencies?: ConstructorDependency[] | null;
+  findings?: DiAnalysisFinding[] | null;
+  warnings?: string[] | null;
+  errorMessage?: string | null;
+};
+
 const app = document.querySelector<HTMLDivElement>('#app');
 
 if (!app) {
@@ -201,6 +238,7 @@ app.innerHTML = `
           <button id="previewButton">Preview diff</button>
           <button id="reviewButton">Run review</button>
           <button id="analyzeButton" class="secondary">.NET analysis</button>
+          <button id="diAnalyzeButton" class="secondary">DI analysis</button>
         </div>
       </div>
       <div class="panel stack">
@@ -235,6 +273,7 @@ bind('statusButton', checkStatus);
 bind('previewButton', previewDiff);
 bind('reviewButton', runReview);
 bind('analyzeButton', runAnalysis);
+bind('diAnalyzeButton', runDiAnalysis);
 bind('refreshReportsButton', loadReports);
 
 void loadReports();
@@ -293,6 +332,76 @@ async function runAnalysis(): Promise<void> {
       ),
     );
   });
+}
+
+async function runDiAnalysis(): Promise<void> {
+  await run('Running DI analysis...', async () => {
+    const result = await api<DiAnalysisResult>('/api/dotnet/di/analyze', {
+      method: 'POST',
+      body: JSON.stringify({ repoPath: repoPath.value }),
+    });
+    output.innerHTML = renderDiAnalysis(result);
+  });
+}
+
+function renderDiAnalysis(result: DiAnalysisResult): string {
+  if (!result.success) {
+    return renderSection(
+      'DI Analysis',
+      `<p class="error">DI analysis failed: ${escapeHtml(result.errorMessage ?? 'Unknown error')}</p>`,
+    );
+  }
+
+  const registrations = result.registrations ?? [];
+  const findings = result.findings ?? [];
+  const warnings = result.warnings ?? [];
+
+  const findingRows = findings.map((f) => {
+    const severity = normalizeSeverity(f.severity);
+    const location = f.filePath ? `${escapeHtml(f.filePath)}${f.line ? `:${f.line}` : ''}` : '';
+    return `
+      <article class="finding-card">
+        <div class="row">
+          <span class="badge severity-${severity.toLowerCase()}">${severity}</span>
+          <span class="muted mono">${escapeHtml(f.code ?? '')}</span>
+        </div>
+        <p>${escapeHtml(f.message ?? '')}</p>
+        ${location ? `<p class="mono muted">${location}</p>` : ''}
+      </article>
+    `;
+  });
+
+  const lifetimeCounts: Record<string, number> = {};
+  for (const r of registrations) {
+    const lt = r.lifetime ?? 'Unknown';
+    lifetimeCounts[lt] = (lifetimeCounts[lt] ?? 0) + 1;
+  }
+  const summaryItems = Object.entries(lifetimeCounts).map(
+    ([lt, count]) => `${count} ${lt}`,
+  );
+
+  const regRows = registrations.slice(0, 50).map(
+    (r) => `<li class="mono">${escapeHtml(r.lifetime ?? '?')} · ${escapeHtml(r.serviceType ?? '(no type)')}${r.implementationType ? ` → ${escapeHtml(r.implementationType)}` : ''} <span class="muted">${escapeHtml(r.filePath ?? '')}${r.line ? `:${r.line}` : ''}</span></li>`,
+  );
+
+  const workspaceInfo = result.workspacePath
+    ? `<p class="muted mono">${escapeHtml(result.workspacePath)}${result.workspaceKind ? ` (${escapeHtml(result.workspaceKind)})` : ''}</p>`
+    : '';
+
+  return `
+    <article class="viewer">
+      <header class="viewer-header">
+        <div>
+          <p class="eyebrow">DI Analysis</p>
+          <h2>${summaryItems.length ? summaryItems.join(', ') + ' registrations' : 'No registrations found'}</h2>
+        </div>
+      </header>
+      ${workspaceInfo}
+      ${findings.length ? renderSection('Findings', `<div class="finding-list">${findingRows.join('')}</div>`) : renderSection('Findings', '<p class="empty">No DI findings.</p>')}
+      ${registrations.length ? renderSection('Registrations', `<ul>${regRows.join('')}</ul>`) : ''}
+      ${warnings.length ? renderSection('Warnings', `<ul>${warnings.map((w) => `<li>${escapeHtml(w)}</li>`).join('')}</ul>`) : ''}
+    </article>
+  `;
 }
 
 async function loadReports(): Promise<void> {

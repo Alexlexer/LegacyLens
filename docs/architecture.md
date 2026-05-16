@@ -56,7 +56,23 @@ Roslyn also provides C# symbol reference analysis through `SymbolFinder.FindRefe
 
 The debug endpoint `POST /api/dotnet/workspace/scan` validates the repository path, reports the selected workspace candidate, and returns workspace counts plus the first 50 symbols. This endpoint is read-only and does not modify or restore project files explicitly.
 
-`POST /api/dotnet/references` resolves a requested C# symbol name/full name and returns matched symbols plus source references. Review reports are not yet powered by Roslyn reference data; future work can merge Roslyn references with gpu-search context for more precise impact analysis.
+`POST /api/dotnet/references` resolves a requested C# symbol name/full name and returns matched symbols plus source references.
+
+Diff review reports are enriched with Roslyn reference context: for each changed `.cs` file the primary symbol (by filename convention) is resolved, and all callers across the solution are reported. This is compiler-accurate and reported separately from gpu-search heuristic dependency impact. LLM prompts distinguish these two layers explicitly.
+
+## Roslyn DI Analysis
+
+`POST /api/dotnet/di/analyze` provides static dependency injection analysis backed by Roslyn. For each document in the workspace it:
+
+- Detects `IServiceCollection` registration calls (`AddScoped`, `AddSingleton`, `AddTransient`, `TryAdd*`) and extracts the service type, implementation type, and lifetime.
+- Extracts public constructor parameters as declared dependencies.
+- Emits advisory findings:
+  - `multiple-registrations` — same service type registered more than once (Warning).
+  - `singleton-depends-on-scoped` — singleton implementation depends on a scoped service (Warning).
+  - `concrete-type-injection` — constructor depends on a concrete class rather than an abstraction (Info).
+  - `missing-registration-candidate` — interface dependency has no matching registration found in the same workspace (Info).
+
+This is **static analysis only** — no code is executed and no runtime container is constructed. Findings are advisory. The analyzer works at the syntax and semantic model level using Roslyn's `MSBuildWorkspace`. It does not require `gpu-search-mcp` or an LLM.
 
 ## Report Persistence
 

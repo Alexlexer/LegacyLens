@@ -140,10 +140,54 @@ public sealed class DiffReviewOrchestratorTests
         Assert.NotNull(report.GpuSearchContext.Files[0].Error);
     }
 
+    [Fact]
+    public async Task ReviewDiffAsync_RespectsMaxFilesToEnrich()
+    {
+        var diff = new GitDiffPreviewResponse(
+            "repo",
+            3,
+            [
+                new GitDiffFile("src/One.cs", "M", 1, 0),
+                new GitDiffFile("src/Two.cs", "M", 1, 0),
+                new GitDiffFile("src/Three.cs", "M", 1, 0)
+            ],
+            "diff");
+        var orchestrator = CreateOrchestrator(
+            diff,
+            new RichGpuSearchClient(),
+            enrichmentOptions: new ReviewEnrichmentOptions { MaxFilesToEnrich = 2 });
+
+        var report = await orchestrator.ReviewDiffAsync(new DiffReviewRequest("repo"), CancellationToken.None);
+
+        Assert.NotNull(report.GpuSearchContext);
+        Assert.Equal(2, report.GpuSearchContext!.Files.Count);
+        Assert.Equal(["src/One.cs", "src/Two.cs"], report.GpuSearchContext.Files.Select(f => f.FilePath).ToArray());
+    }
+
+    [Fact]
+    public async Task ReviewDiffAsync_RespectsMaxSearchResultsPerFile()
+    {
+        var diff = new GitDiffPreviewResponse(
+            "repo",
+            1,
+            [new GitDiffFile("src/UserService.cs", "M", 1, 0)],
+            "diff");
+        var gpuSearchClient = new RichGpuSearchClient();
+        var orchestrator = CreateOrchestrator(
+            diff,
+            gpuSearchClient,
+            enrichmentOptions: new ReviewEnrichmentOptions { MaxSearchResultsPerFile = 3 });
+
+        await orchestrator.ReviewDiffAsync(new DiffReviewRequest("repo"), CancellationToken.None);
+
+        Assert.Equal(3, gpuSearchClient.LastSearchHybridLimit);
+    }
+
     private static DiffReviewOrchestrator CreateOrchestrator(
         GitDiffPreviewResponse diff,
         IGpuSearchClient gpuSearchClient,
-        IReportRepository? repository = null)
+        IReportRepository? repository = null,
+        ReviewEnrichmentOptions? enrichmentOptions = null)
     {
         return new DiffReviewOrchestrator(
             new StubGitDiffService(diff),
@@ -151,7 +195,8 @@ public sealed class DiffReviewOrchestratorTests
             new MarkdownReviewReportFormatter(),
             new ReviewPromptBuilder(),
             new StubReviewLlmProvider(),
-            repository ?? new StubReportRepository());
+            repository ?? new StubReportRepository(),
+            enrichmentOptions ?? new ReviewEnrichmentOptions());
     }
 
     private sealed class StubGitDiffService(GitDiffPreviewResponse response) : IGitDiffService
@@ -248,6 +293,8 @@ public sealed class DiffReviewOrchestratorTests
         IReadOnlyList<ImpactedFile>? impactedFiles = null,
         string? skeletonContent = null) : IGpuSearchClient
     {
+        public int? LastSearchHybridLimit { get; private set; }
+
         public Task<GpuSearchHealth> GetHealthAsync(CancellationToken cancellationToken)
             => Task.FromResult(new GpuSearchHealth("ok"));
 
@@ -261,8 +308,11 @@ public sealed class DiffReviewOrchestratorTests
             => Task.FromResult<IReadOnlyList<GpuSearchResult>>([]);
 
         public Task<IReadOnlyList<GpuSearchResult>> SearchHybridAsync(SearchHybridRequest request, CancellationToken cancellationToken)
-            => Task.FromResult<IReadOnlyList<GpuSearchResult>>(
+        {
+            LastSearchHybridLimit = request.Limit;
+            return Task.FromResult<IReadOnlyList<GpuSearchResult>>(
                 [new GpuSearchResult("src/Related.cs", null, 10, 15, 0.8, null, "related code", "hybrid")]);
+        }
 
         public Task<ReadBlockResponse> ReadBlockAsync(ReadBlockRequest request, CancellationToken cancellationToken)
             => Task.FromResult(new ReadBlockResponse("ok", request.Path, null, null, null, null, null));

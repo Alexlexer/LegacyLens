@@ -123,6 +123,24 @@ Click **Run review**. LegacyLens generates a Markdown report with:
 
 > **Dependency impact is advisory.** gpu-search-mcp analyses imports and type/name heuristics — it is not compiler-accurate. Confidence, analysis mode, impacted-file reasons, warnings, and limitations are shown in the report when provided by gpu-search-mcp.
 
+Enrichment limits are configurable in `LegacyLens:ReviewEnrichment`:
+
+```json
+{
+  "LegacyLens": {
+    "ReviewEnrichment": {
+      "MaxFilesToEnrich": 10,
+      "MaxSearchResultsPerFile": 5,
+      "MaxSkeletonLength": 4000,
+      "MaxBlockLength": 4000,
+      "MaxRelatedResultSnippetLength": 1000
+    }
+  }
+}
+```
+
+Defaults are safe and preserve demo behavior. Lower values are faster and create smaller reports; higher values provide deeper context but can increase token usage and local LLM summary time.
+
 The report is saved to SQLite and appears in the **Saved reports** panel.
 
 To include a local LLM summary, configure LM Studio or Ollama as the review provider, then tick **Include local LLM summary** before clicking **Run review**. The checkbox enables `useLlm=true`; deterministic review remains the default when it is unchecked.

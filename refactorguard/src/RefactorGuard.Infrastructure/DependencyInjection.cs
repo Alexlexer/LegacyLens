@@ -39,6 +39,13 @@ public static class DependencyInjection
             .Bind(Prefer(configuration, "LegacyLens:Review", LlmProviderOptions.SectionName))
             .Validate(options => !string.IsNullOrWhiteSpace(options.Provider), "Review Provider is required.")
             .ValidateOnStart();
+        services.AddOptions<ReviewEnrichmentOptions>()
+            .Bind(Prefer(configuration, "LegacyLens:ReviewEnrichment", ReviewEnrichmentOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+        services.AddSingleton(serviceProvider => serviceProvider
+            .GetRequiredService<Microsoft.Extensions.Options.IOptions<ReviewEnrichmentOptions>>()
+            .Value);
         services.AddOptions<LmStudioOptions>()
             .Bind(Prefer(configuration, "LegacyLens:LmStudio", LmStudioOptions.SectionName))
             .ValidateDataAnnotations()

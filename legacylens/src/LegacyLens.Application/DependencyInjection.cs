@@ -20,6 +20,12 @@ public static class DependencyInjection
         services.AddScoped<IReviewOrchestrator, DiffReviewOrchestrator>();
         services.AddSingleton<IReviewReportFormatter, MarkdownReviewReportFormatter>();
         services.AddSingleton<IReviewPromptBuilder, ReviewPromptBuilder>();
+        services.AddScoped<IAuditProvider, TechnologySignalAuditProvider>();
+        services.AddScoped<IAuditProvider, RoslynAuditProvider>();
+        services.AddScoped<IAuditProvider, DependencyInjectionAuditProvider>();
+        services.AddScoped<IAuditProvider, GpuSearchSignalAuditProvider>();
+        services.AddScoped<IAuditProvider, ArchitectureSignalAuditProvider>();
+        services.AddScoped<IAuditProvider, RecommendedNextStepsAuditProvider>();
         services.AddScoped<ILegacyAuditOrchestrator, LegacyAuditOrchestrator>();
         services.AddSingleton<ILegacyAuditMarkdownFormatter, LegacyAuditMarkdownFormatter>();
         services.TryAddScoped<IReportRepository, NullReportRepository>();

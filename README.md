@@ -158,6 +158,13 @@ Configure allowed repository roots before using diff preview:
     "Review": {
       "Provider": "LmStudio"
     },
+    "ReviewEnrichment": {
+      "MaxFilesToEnrich": 10,
+      "MaxSearchResultsPerFile": 5,
+      "MaxSkeletonLength": 4000,
+      "MaxBlockLength": 4000,
+      "MaxRelatedResultSnippetLength": 1000
+    },
     "LmStudio": {
       "BaseUrl": "http://127.0.0.1:1234/v1/",
       "Model": "local-model",
@@ -176,6 +183,18 @@ Configure allowed repository roots before using diff preview:
 ```
 
 The `RefactorGuard` config section is also accepted for backward compatibility.
+
+## Review enrichment limits
+
+gpu-search enrichment limits are configurable under `LegacyLens:ReviewEnrichment`:
+
+- `MaxFilesToEnrich`: changed files that receive gpu-search context.
+- `MaxSearchResultsPerFile`: related results requested per file.
+- `MaxSkeletonLength`: maximum skeleton preview characters.
+- `MaxBlockLength`: reserved cap for block-level context.
+- `MaxRelatedResultSnippetLength`: maximum related result snippet characters.
+
+Defaults preserve existing behavior and protect prompt size/local performance. Lower values produce faster, smaller reports; higher values provide deeper context but can increase report size, token usage, and LLM summary latency.
 
 ## Ollama provider
 

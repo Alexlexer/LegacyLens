@@ -61,6 +61,24 @@ python -m mypy .
 
 The review degrades gracefully: if gpu-search-mcp is not reachable, the deterministic review still completes and an `Info` finding is added.
 
+Configure enrichment limits under `LegacyLens:ReviewEnrichment`:
+
+```json
+{
+  "LegacyLens": {
+    "ReviewEnrichment": {
+      "MaxFilesToEnrich": 10,
+      "MaxSearchResultsPerFile": 5,
+      "MaxSkeletonLength": 4000,
+      "MaxBlockLength": 4000,
+      "MaxRelatedResultSnippetLength": 1000
+    }
+  }
+}
+```
+
+Defaults are safe and preserve existing behavior. Lower values make reviews faster and reports smaller; higher values add context but increase prompt size and local LLM latency. The `RefactorGuard:ReviewEnrichment` config root is also accepted for backward compatibility.
+
 Recommended two-process workflow:
 
 Terminal 1 — start gpu-search-mcp pointing at the repository to analyse:

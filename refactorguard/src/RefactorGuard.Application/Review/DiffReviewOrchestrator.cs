@@ -12,12 +12,9 @@ public sealed class DiffReviewOrchestrator(
     IReviewReportFormatter reportFormatter,
     IReviewPromptBuilder promptBuilder,
     IReviewLlmProvider llmProvider,
-    IReportRepository reportRepository) : IReviewOrchestrator
+    IReportRepository reportRepository,
+    ReviewEnrichmentOptions enrichmentOptions) : IReviewOrchestrator
 {
-    private const int MaxFilesToEnrich = 10;
-    private const int MaxSearchResultsPerFile = 5;
-    private const int MaxSkeletonLength = 4000;
-
     public async Task<DiffReviewReport> ReviewDiffAsync(
         DiffReviewRequest request,
         CancellationToken cancellationToken)
@@ -73,7 +70,7 @@ public sealed class DiffReviewOrchestrator(
         }
 
         var fileContexts = new List<ChangedFileContext>();
-        foreach (var file in diff.Files.Take(MaxFilesToEnrich))
+        foreach (var file in diff.Files.Take(enrichmentOptions.MaxFilesToEnrich))
         {
             var ctx = await TryGetFileContextAsync(file.Path, cancellationToken);
             fileContexts.Add(ctx);
@@ -140,8 +137,8 @@ public sealed class DiffReviewOrchestrator(
 
             if (!string.IsNullOrWhiteSpace(skeletonResponse.Content))
             {
-                var content = skeletonResponse.Content.Length > MaxSkeletonLength
-                    ? string.Concat(skeletonResponse.Content.AsSpan(0, MaxSkeletonLength), "\n[skeleton truncated]")
+                var content = skeletonResponse.Content.Length > enrichmentOptions.MaxSkeletonLength
+                    ? string.Concat(skeletonResponse.Content.AsSpan(0, enrichmentOptions.MaxSkeletonLength), "\n[skeleton truncated]")
                     : skeletonResponse.Content;
                 skeleton = new SkeletonSummary(content, skeletonResponse.Language);
             }
@@ -157,11 +154,17 @@ public sealed class DiffReviewOrchestrator(
             if (!string.IsNullOrWhiteSpace(query))
             {
                 var searchResults = await gpuSearchClient.SearchHybridAsync(
-                    new SearchHybridRequest(query, null, MaxSearchResultsPerFile),
+                    new SearchHybridRequest(query, null, enrichmentOptions.MaxSearchResultsPerFile),
                     cancellationToken);
 
                 relatedResults.AddRange(searchResults.Select(r =>
-                    new RelatedCodeResult(r.File, r.LineStart, r.LineEnd, r.Snippet, r.Engine, r.Score)));
+                    new RelatedCodeResult(
+                        r.File,
+                        r.LineStart,
+                        r.LineEnd,
+                        Truncate(r.Snippet, enrichmentOptions.MaxRelatedResultSnippetLength, "\n[snippet truncated]"),
+                        r.Engine,
+                        r.Score)));
             }
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
@@ -170,6 +173,14 @@ public sealed class DiffReviewOrchestrator(
         }
 
         return new ChangedFileContext(filePath, impact, skeleton, relatedResults, error);
+    }
+
+    private static string? Truncate(string? value, int maxLength, string suffix)
+    {
+        if (string.IsNullOrEmpty(value) || value.Length <= maxLength)
+            return value;
+
+        return string.Concat(value.AsSpan(0, maxLength), suffix);
     }
 
     private static List<ReviewFinding> BuildDeterministicFindings(GitDiffPreviewResponse diff)

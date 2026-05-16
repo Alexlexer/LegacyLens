@@ -175,6 +175,93 @@ type DotNetAnalysis = {
   findings?: DotNetFinding[];
 };
 
+type AuditFinding = {
+  severity?: string;
+  code?: string;
+  title?: string;
+  message?: string;
+  filePath?: string | null;
+  line?: number | null;
+  evidence?: string | null;
+};
+
+type TechnologySignal = {
+  name?: string;
+  category?: string;
+  evidence?: string;
+  filePath?: string | null;
+  confidence?: string;
+};
+
+type ArchitectureSignal = {
+  name?: string;
+  message?: string;
+  evidence?: string;
+  confidence?: string;
+};
+
+type AuditRoslynSummary = {
+  workspaceLoaded?: boolean;
+  workspacePath?: string | null;
+  workspaceKind?: string | null;
+  projectCount?: number;
+  documentCount?: number;
+  symbolCount?: number;
+  classCount?: number;
+  interfaceCount?: number;
+  methodCount?: number;
+  warnings?: string[] | null;
+  errorMessage?: string | null;
+};
+
+type DiSummary = {
+  registrationCount?: number;
+  constructorDependencyCount?: number;
+  findingCount?: number;
+  registrationsByLifetime?: Record<string, number> | null;
+  findings?: AuditFinding[] | null;
+};
+
+type GpuSearchAuditResult = {
+  query?: string;
+  filePath?: string | null;
+  line?: number | null;
+  snippet?: string | null;
+};
+
+type GpuSearchAuditSummary = {
+  wasAvailable?: boolean;
+  queriesRun?: number;
+  totalResults?: number;
+  results?: GpuSearchAuditResult[] | null;
+  errorMessage?: string | null;
+};
+
+type LegacyAuditReport = {
+  reportId?: string;
+  repoPath?: string;
+  generatedAtUtc?: string;
+  summary?: string;
+  workspaceSummary?: {
+    selectedWorkspacePath?: string | null;
+    selectedWorkspaceKind?: string | null;
+    totalCandidates?: number;
+    slnxCount?: number;
+    slnCount?: number;
+    csprojCount?: number;
+    warnings?: string[] | null;
+  } | null;
+  technologySignals?: TechnologySignal[] | null;
+  architectureSignals?: ArchitectureSignal[] | null;
+  riskFindings?: AuditFinding[] | null;
+  roslynSummary?: AuditRoslynSummary | null;
+  dependencyInjectionSummary?: DiSummary | null;
+  gpuSearchSummary?: GpuSearchAuditSummary | null;
+  recommendedNextSteps?: string[] | null;
+  llmSummary?: string | null;
+  markdown?: string;
+};
+
 const app = document.querySelector<HTMLDivElement>('#app');
 
 if (!app) {
@@ -202,6 +289,17 @@ app.innerHTML = `
           <button id="reviewButton">Run review</button>
           <button id="analyzeButton" class="secondary">.NET analysis</button>
         </div>
+        <details class="audit-options">
+          <summary>Legacy Audit</summary>
+          <div class="stack audit-form">
+            <label class="check"><input id="auditUseLlm" type="checkbox" /> Use LLM summary</label>
+            <label class="check"><input id="auditIncludeRoslyn" type="checkbox" checked /> Include Roslyn</label>
+            <label class="check"><input id="auditIncludeGpuSearch" type="checkbox" checked /> Include gpu-search</label>
+            <label class="check"><input id="auditIncludePresets" type="checkbox" checked /> Include .NET presets</label>
+            <label class="check"><input id="auditIncludeDi" type="checkbox" checked /> Include DI analysis</label>
+            <button id="auditButton" class="secondary">Run legacy audit</button>
+          </div>
+        </details>
       </div>
       <div class="panel stack">
         <div class="row">
@@ -235,6 +333,7 @@ bind('statusButton', checkStatus);
 bind('previewButton', previewDiff);
 bind('reviewButton', runReview);
 bind('analyzeButton', runAnalysis);
+bind('auditButton', runAudit);
 bind('refreshReportsButton', loadReports);
 
 void loadReports();
@@ -293,6 +392,272 @@ async function runAnalysis(): Promise<void> {
       ),
     );
   });
+}
+
+async function runAudit(): Promise<void> {
+  await run('Running legacy audit...', async () => {
+    const auditUseLlm = document.getElementById('auditUseLlm') as HTMLInputElement | null;
+    const auditIncludeRoslyn = document.getElementById('auditIncludeRoslyn') as HTMLInputElement | null;
+    const auditIncludeGpuSearch = document.getElementById('auditIncludeGpuSearch') as HTMLInputElement | null;
+    const auditIncludePresets = document.getElementById('auditIncludePresets') as HTMLInputElement | null;
+    const auditIncludeDi = document.getElementById('auditIncludeDi') as HTMLInputElement | null;
+
+    const report = await api<LegacyAuditReport>('/api/audit/legacy-dotnet', {
+      method: 'POST',
+      body: JSON.stringify({
+        repoPath: repoPath.value,
+        useLlm: auditUseLlm?.checked ?? false,
+        includeRoslyn: auditIncludeRoslyn?.checked ?? true,
+        includeGpuSearch: auditIncludeGpuSearch?.checked ?? true,
+        includeDotNetPresets: auditIncludePresets?.checked ?? true,
+        includeDependencyInjection: auditIncludeDi?.checked ?? true,
+      }),
+    });
+    renderAuditReport(report);
+  });
+}
+
+function renderAuditReport(report: LegacyAuditReport): void {
+  copyPayloads.clear();
+  const markdown = report.markdown ?? '';
+  registerCopy('audit-markdown', markdown);
+
+  output.innerHTML = `
+    <article class="viewer">
+      <header class="viewer-header">
+        <div>
+          <p class="eyebrow">Legacy .NET Audit Report</p>
+          <h2>${escapeHtml(report.reportId ?? 'Audit report')}</h2>
+        </div>
+        <div class="actions compact">
+          <button class="ghost small" data-copy="audit-markdown">Copy Markdown</button>
+        </div>
+      </header>
+      ${renderAuditSummary(report)}
+      ${renderAuditWorkspace(report)}
+      ${renderTechnologySignals(report.technologySignals ?? [])}
+      ${renderArchitectureSignals(report.architectureSignals ?? [])}
+      ${renderAuditFindings(report.riskFindings ?? [])}
+      ${renderAuditRoslynSummary(report.roslynSummary ?? null)}
+      ${renderAuditDiSummary(report.dependencyInjectionSummary ?? null)}
+      ${renderAuditGpuSearchSummary(report.gpuSearchSummary ?? null)}
+      ${renderNextSteps(report.recommendedNextSteps ?? [])}
+      ${report.llmSummary ? renderSection('LLM Summary', `<div class="llm-summary">${escapeHtml(report.llmSummary)}</div>`) : ''}
+      ${renderRawMarkdown(markdown)}
+    </article>
+  `;
+
+  output.querySelectorAll<HTMLButtonElement>('[data-copy]').forEach((button) => {
+    button.addEventListener('click', () => copyText(button.dataset.copy ?? ''));
+  });
+}
+
+function renderAuditSummary(report: LegacyAuditReport): string {
+  return renderSection(
+    'Summary',
+    `
+      <div class="meta-grid">
+        ${meta('Repository', report.repoPath)}
+        ${meta('Generated', report.generatedAtUtc ? formatDate(report.generatedAtUtc) : undefined)}
+        ${meta('Technology signals', String(report.technologySignals?.length ?? 0))}
+        ${meta('Risk findings', String(report.riskFindings?.length ?? 0))}
+      </div>
+      <p>${escapeHtml(report.summary ?? '')}</p>
+    `,
+  );
+}
+
+function renderAuditWorkspace(report: LegacyAuditReport): string {
+  const ws = report.workspaceSummary;
+  if (!ws) return '';
+
+  return renderSection(
+    'Workspace',
+    `
+      <div class="meta-grid">
+        ${meta('Selected workspace', ws.selectedWorkspacePath ?? 'None')}
+        ${meta('Kind', ws.selectedWorkspaceKind ?? 'n/a')}
+        ${meta('Candidates', `${ws.totalCandidates ?? 0} (${ws.slnxCount ?? 0} .slnx, ${ws.slnCount ?? 0} .sln, ${ws.csprojCount ?? 0} .csproj)`)}
+      </div>
+      ${ws.warnings?.length ? detailsList('Warnings', ws.warnings) : ''}
+    `,
+  );
+}
+
+function renderTechnologySignals(signals: TechnologySignal[]): string {
+  if (signals.length === 0) {
+    return renderSection('Technology Signals', '<p class="empty">No signals detected.</p>');
+  }
+
+  const items = signals.map((s) => `
+    <article class="finding-card">
+      <div class="row">
+        <span class="badge">${escapeHtml(s.category ?? 'Signal')}</span>
+        <span class="badge confidence">${escapeHtml(s.confidence ?? 'unknown')}</span>
+      </div>
+      <h3>${escapeHtml(s.name ?? 'Signal')}</h3>
+      ${s.filePath ? `<p class="mono muted">${escapeHtml(s.filePath)}</p>` : ''}
+      <p class="muted">${escapeHtml(s.evidence ?? '')}</p>
+    </article>
+  `).join('');
+
+  return renderSection('Technology Signals', `<div class="finding-list">${items}</div>`);
+}
+
+function renderArchitectureSignals(signals: ArchitectureSignal[]): string {
+  if (signals.length === 0) {
+    return renderSection('Architecture Signals', '<p class="empty">No signals detected.</p>');
+  }
+
+  const items = signals.map((s) => `
+    <article class="finding-card">
+      <div class="row">
+        <span class="badge confidence">${escapeHtml(s.confidence ?? 'unknown')}</span>
+      </div>
+      <h3>${escapeHtml(s.name ?? 'Signal')}</h3>
+      <p>${escapeHtml(s.message ?? '')}</p>
+      <p class="muted">${escapeHtml(s.evidence ?? '')}</p>
+    </article>
+  `).join('');
+
+  return renderSection('Architecture Signals', `<div class="finding-list">${items}</div>`);
+}
+
+function renderAuditFindings(findings: AuditFinding[]): string {
+  if (findings.length === 0) {
+    return renderSection('Risk Findings', '<p class="empty">No risk findings.</p>');
+  }
+
+  const items = findings.map((f) => {
+    const severity = normalizeSeverity(f.severity);
+    return `
+      <article class="finding-card">
+        <div class="row">
+          <span class="badge severity-${severity.toLowerCase()}">${severity}</span>
+          ${f.code ? `<span class="muted mono">${escapeHtml(f.code)}</span>` : ''}
+        </div>
+        <h3>${escapeHtml(f.title ?? f.code ?? 'Finding')}</h3>
+        ${f.filePath ? `<p class="mono muted">${escapeHtml(f.filePath)}${f.line ? `:${f.line}` : ''}</p>` : ''}
+        <p>${escapeHtml(f.message ?? '')}</p>
+        ${f.evidence ? `<p class="muted"><em>Evidence: ${escapeHtml(f.evidence)}</em></p>` : ''}
+      </article>
+    `;
+  }).join('');
+
+  return renderSection('Risk Findings', `<div class="finding-list">${items}</div>`);
+}
+
+function renderAuditRoslynSummary(roslyn: AuditRoslynSummary | null): string {
+  if (!roslyn) {
+    return renderSection('Roslyn Summary', '<p class="empty">Roslyn analysis was not requested.</p>');
+  }
+
+  if (!roslyn.workspaceLoaded) {
+    return renderSection(
+      'Roslyn Summary',
+      `<p class="error">Roslyn workspace could not be loaded.</p>
+       ${roslyn.errorMessage ? `<p class="muted">${escapeHtml(roslyn.errorMessage)}</p>` : ''}
+       ${roslyn.warnings?.length ? detailsList('Warnings', roslyn.warnings) : ''}`,
+    );
+  }
+
+  return renderSection(
+    'Roslyn Summary',
+    `
+      <div class="meta-grid">
+        ${meta('Workspace', roslyn.workspacePath ?? 'n/a')}
+        ${meta('Kind', roslyn.workspaceKind ?? 'n/a')}
+        ${meta('Projects', String(roslyn.projectCount ?? 0))}
+        ${meta('Documents', String(roslyn.documentCount ?? 0))}
+        ${meta('Symbols', String(roslyn.symbolCount ?? 0))}
+        ${meta('Classes', String(roslyn.classCount ?? 0))}
+        ${meta('Interfaces', String(roslyn.interfaceCount ?? 0))}
+        ${meta('Methods', String(roslyn.methodCount ?? 0))}
+      </div>
+      ${roslyn.warnings?.length ? detailsList('Warnings', roslyn.warnings) : ''}
+    `,
+  );
+}
+
+function renderAuditDiSummary(di: DiSummary | null): string {
+  if (!di) {
+    return renderSection('Dependency Injection Summary', '<p class="empty">DI analysis was not requested.</p>');
+  }
+
+  const lifetimes = di.registrationsByLifetime
+    ? Object.entries(di.registrationsByLifetime).map(([k, v]) => `${k}: ${v}`).join(', ')
+    : 'n/a';
+
+  const diFindings = (di.findings ?? []).map((f) => `
+    <article class="finding-card">
+      <div class="row">
+        <span class="badge severity-${normalizeSeverity(f.severity).toLowerCase()}">${normalizeSeverity(f.severity)}</span>
+        ${f.code ? `<span class="muted mono">${escapeHtml(f.code)}</span>` : ''}
+      </div>
+      <p>${escapeHtml(f.message ?? '')}</p>
+      ${f.filePath ? `<p class="mono muted">${escapeHtml(f.filePath)}${f.line ? `:${f.line}` : ''}</p>` : ''}
+    </article>
+  `).join('');
+
+  return renderSection(
+    'Dependency Injection Summary',
+    `
+      <div class="meta-grid">
+        ${meta('Registrations', String(di.registrationCount ?? 0))}
+        ${meta('Constructor deps', String(di.constructorDependencyCount ?? 0))}
+        ${meta('Findings', String(di.findingCount ?? 0))}
+        ${meta('By lifetime', lifetimes)}
+      </div>
+      ${diFindings ? `<div class="finding-list">${diFindings}</div>` : ''}
+    `,
+  );
+}
+
+function renderAuditGpuSearchSummary(gpuSearch: GpuSearchAuditSummary | null): string {
+  if (!gpuSearch) {
+    return renderSection('gpu-search Findings', '<p class="empty">gpu-search was not requested.</p>');
+  }
+
+  if (!gpuSearch.wasAvailable) {
+    return renderSection(
+      'gpu-search Findings',
+      `<p class="error">gpu-search was unavailable.</p>
+       ${gpuSearch.errorMessage ? `<p class="muted">${escapeHtml(gpuSearch.errorMessage)}</p>` : ''}`,
+    );
+  }
+
+  const resultItems = (gpuSearch.results ?? []).slice(0, 20).map((r) => `
+    <article class="context-card">
+      <div class="row">
+        <span class="muted mono">${escapeHtml(r.query ?? '')}</span>
+        ${r.filePath ? `<span class="mono">${escapeHtml(r.filePath)}${r.line ? `:${r.line}` : ''}</span>` : ''}
+      </div>
+      ${r.snippet ? `<pre>${escapeHtml(r.snippet)}</pre>` : ''}
+    </article>
+  `).join('');
+
+  return renderSection(
+    'gpu-search Findings',
+    `
+      <p class="muted"><em>Results are heuristic/retrieval-based, not compiler-verified.</em></p>
+      <div class="meta-grid">
+        ${meta('Queries run', String(gpuSearch.queriesRun ?? 0))}
+        ${meta('Total results', String(gpuSearch.totalResults ?? 0))}
+      </div>
+      ${resultItems ? `<div class="context-list">${resultItems}</div>` : '<p class="empty">No results returned.</p>'}
+    `,
+  );
+}
+
+function renderNextSteps(steps: string[]): string {
+  if (steps.length === 0) {
+    return renderSection('Recommended Next Steps', '<p class="empty">No recommendations generated.</p>');
+  }
+
+  return renderSection(
+    'Recommended Next Steps',
+    `<ul>${steps.map((s) => `<li>${escapeHtml(s)}</li>`).join('')}</ul>`,
+  );
 }
 
 async function loadReports(): Promise<void> {

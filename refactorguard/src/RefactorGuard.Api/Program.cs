@@ -1,4 +1,5 @@
 using RefactorGuard.Application;
+using RefactorGuard.Application.Audit;
 using RefactorGuard.Application.DotNetAnalysis;
 using RefactorGuard.Application.Git;
 using RefactorGuard.Application.Reports;
@@ -26,6 +27,43 @@ app.MapGet("/api/search/status", async (
 {
     var status = await workflow.GetStatusAsync(cancellationToken);
     return Results.Ok(status);
+});
+app.MapPost("/api/audit/legacy-dotnet", async (
+    LegacyAuditRequest request,
+    ILegacyAuditOrchestrator auditOrchestrator,
+    IRepoPathValidator repoPathValidator,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var repoPath = repoPathValidator.Validate(request.RepoPath ?? string.Empty);
+        var report = await auditOrchestrator.AuditAsync(request with { RepoPath = repoPath }, cancellationToken);
+        return Results.Ok(report);
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new ProblemDetailsResponse(
+            "https://refactorguard.local/errors/invalid-audit-request",
+            "Invalid audit request",
+            StatusCodes.Status400BadRequest,
+            ex.Message));
+    }
+    catch (UnauthorizedAccessException ex)
+    {
+        return Results.BadRequest(new ProblemDetailsResponse(
+            "https://refactorguard.local/errors/invalid-repo-path",
+            "Invalid repository path",
+            StatusCodes.Status400BadRequest,
+            ex.Message));
+    }
+    catch (DirectoryNotFoundException ex)
+    {
+        return Results.BadRequest(new ProblemDetailsResponse(
+            "https://refactorguard.local/errors/repo-not-found",
+            "Repository path not found",
+            StatusCodes.Status400BadRequest,
+            ex.Message));
+    }
 });
 app.MapPost("/api/dotnet/analyze", async (
     DotNetAnalysisRequest request,

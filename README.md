@@ -205,6 +205,52 @@ gpu-search enrichment limits are configurable under `LegacyLens:ReviewEnrichment
 
 Defaults preserve existing behavior and protect prompt size/local performance. Lower values produce faster, smaller reports; higher values provide deeper context but can increase report size, token usage, and LLM summary latency.
 
+## Legacy .NET Audit Report
+
+Generate a high-level repository audit for legacy .NET projects — useful for onboarding, modernization planning, architecture review, and risk assessment.
+
+```text
+POST /api/audit/legacy-dotnet
+Content-Type: application/json
+
+{
+  "repoPath": "D:\\Projects\\SomeRepo",
+  "useLlm": false,
+  "includeRoslyn": true,
+  "includeGpuSearch": true,
+  "includeDotNetPresets": true,
+  "includeDependencyInjection": true
+}
+```
+
+The audit is **deterministic by default**. `useLlm: false` is the default and produces a full structured report without any LLM call. Set `useLlm: true` to add an optional local LLM executive summary.
+
+Good candidate repositories include:
+
+- [OrchardCMS/Orchard](https://github.com/OrchardCMS/Orchard) — ASP.NET MVC 5 CMS on .NET Framework
+- [BlogEngine.NET](https://github.com/BlogEngine/BlogEngine.NET) — classic .NET Framework blog engine
+- [DNN Platform](https://github.com/dnnsoftware/Dnn.Platform) — WebForms-based portal
+- Old nopCommerce tags (< 4.0) — .NET Framework e-commerce
+
+### What the audit detects
+
+| Signal type | Examples |
+|---|---|
+| Technology signals | .NET Framework, ASP.NET MVC, WebForms, `packages.config`, `web.config`, `Global.asax`, SDK-style/old-style csproj |
+| Architecture signals | Legacy framework, interface-driven design, multi-project solution, DI container usage |
+| Risk findings | `web-config-present`, `packages-config-present`, `no-tests-detected`, `broad-exception-catch`, `sync-over-async`, `raw-sql-usage`, `service-locator-usage`, `roslyn-unavailable`, `gpu-search-unavailable` |
+| DI findings | `multiple-registrations`, `singleton-depends-on-scoped`, `concrete-type-injection`, `missing-registration-candidate` |
+
+### Enrichment layers
+
+- **Roslyn summary** — compiler-aware when workspace loads. Reports project/document/symbol/class/interface/method counts. Falls back gracefully if no `.sln`/`.csproj` found.
+- **DI analysis** — static analysis of `IServiceCollection` registration patterns and constructor dependencies. Advisory, not runtime verification.
+- **gpu-search findings** — pattern-based scans for legacy patterns (`System.Web`, `SqlConnection`, `catch (Exception)`, `.Result`, etc.) when gpu-search-mcp is running. Heuristic/retrieval-based, not compiler-verified.
+- **Recommended next steps** — deterministic, derived from detected findings.
+- **LLM summary** — optional. Uses the configured local LLM provider (LM Studio or Ollama). Advisory only.
+
+The UI includes a **Legacy Audit** panel (expandable from the main control panel) with per-option checkboxes and a "Run legacy audit" button.
+
 ## Ollama provider
 
 Ollama is optional; deterministic review remains the default and `useLlm=true` is still required for an LLM summary.

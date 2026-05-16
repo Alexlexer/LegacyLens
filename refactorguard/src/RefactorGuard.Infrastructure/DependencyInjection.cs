@@ -30,6 +30,7 @@ public static class DependencyInjection
             serviceProvider.GetRequiredService<RoslynWorkspaceLoader>());
         services.AddScoped<IRoslynSymbolScanner, RoslynSymbolScanner>();
         services.AddScoped<IRoslynReferenceAnalyzer, RoslynReferenceAnalyzer>();
+        services.AddScoped<IRoslynDependencyInjectionAnalyzer, RoslynDependencyInjectionAnalyzer>();
         services.AddOptions<GpuSearchOptions>()
             .Bind(Prefer(configuration, "LegacyLens:GpuSearch", GpuSearchOptions.SectionName))
             .ValidateDataAnnotations()

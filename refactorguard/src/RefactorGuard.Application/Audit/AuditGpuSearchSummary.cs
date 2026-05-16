@@ -1,0 +1,14 @@
+namespace RefactorGuard.Application.Audit;
+
+public sealed record AuditGpuSearchResult(
+    string Query,
+    string? FilePath,
+    int? Line,
+    string? Snippet);
+
+public sealed record AuditGpuSearchSummary(
+    bool WasAvailable,
+    int QueriesRun,
+    int TotalResults,
+    IReadOnlyList<AuditGpuSearchResult> Results,
+    string? ErrorMessage);

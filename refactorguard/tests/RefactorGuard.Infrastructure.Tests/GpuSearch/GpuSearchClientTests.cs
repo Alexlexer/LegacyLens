@@ -258,6 +258,50 @@ public sealed class GpuSearchClientTests
     }
 
     [Fact]
+    public async Task GetDependencyImpactAsync_ParsesImpactedFileReason()
+    {
+        var client = CreateClient(new
+        {
+            result = "ok",
+            file = "src/UserService.cs",
+            impactedFiles = new[]
+            {
+                new { file = "src/UserController.cs", hops = 1, reason = "references type UserService" }
+            }
+        });
+        var gpuSearchClient = new GpuSearchClient(client);
+
+        var impact = await gpuSearchClient.GetDependencyImpactAsync(
+            new DependencyImpactRequest("src/UserService.cs"),
+            CancellationToken.None);
+
+        Assert.Single(impact.ImpactedFiles);
+        Assert.Equal("references type UserService", impact.ImpactedFiles[0].Reason);
+    }
+
+    [Fact]
+    public async Task GetDependencyImpactAsync_HandlesMissingImpactedFileReason()
+    {
+        var client = CreateClient(new
+        {
+            result = "ok",
+            file = "src/UserService.cs",
+            impactedFiles = new[]
+            {
+                new { file = "src/UserController.cs", hops = 1 }
+            }
+        });
+        var gpuSearchClient = new GpuSearchClient(client);
+
+        var impact = await gpuSearchClient.GetDependencyImpactAsync(
+            new DependencyImpactRequest("src/UserService.cs"),
+            CancellationToken.None);
+
+        Assert.Single(impact.ImpactedFiles);
+        Assert.Null(impact.ImpactedFiles[0].Reason);
+    }
+
+    [Fact]
     public async Task GetDependencyImpactAsync_HandlesAbsentMetadataFields_Safely()
     {
         var client = CreateClient(new

@@ -3,4 +3,5 @@ namespace RefactorGuard.Domain.Search;
 public sealed record ImpactedFile(
     string File,
     string? AbsoluteFile,
-    int Hops);
+    int Hops,
+    string? Reason = null);

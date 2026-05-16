@@ -43,12 +43,20 @@ type ReviewFinding = {
 type DependencyImpactSummary = {
   totalImpacted?: number | null;
   directImporters?: string[] | null;
-  impactedFiles?: string[] | null;
+  impactedFiles?: ImpactedFile[] | string[] | null;
   confidence?: string | null;
   analysisMode?: string | null;
   warnings?: string[] | null;
   limitations?: string[] | null;
   summary?: string | null;
+};
+
+type ImpactedFile = {
+  file?: string;
+  filePath?: string;
+  path?: string;
+  hops?: number | null;
+  reason?: string | null;
 };
 
 type RelatedCodeResult = {
@@ -74,7 +82,7 @@ type ChangedFileContext = {
   dependencyImpact?: DependencyImpactSummary | null;
   confidence?: string | null;
   analysisMode?: string | null;
-  impactedFiles?: string[] | null;
+  impactedFiles?: ImpactedFile[] | string[] | null;
   warnings?: string[] | null;
   limitations?: string[] | null;
   relatedResults?: RelatedCodeResult[] | null;
@@ -397,7 +405,7 @@ function renderGpuSearchContext(context: GpuSearchContext | null): string {
 
 function renderChangedFileContext(file: ChangedFileContext): string {
   const impact = file.dependencyImpact;
-  const impactedFiles = impact?.directImporters ?? impact?.impactedFiles ?? file.impactedFiles ?? [];
+  const impactedFiles = normalizeImpactedFiles(impact?.impactedFiles ?? file.impactedFiles, impact?.directImporters);
   const warnings = impact?.warnings ?? file.warnings ?? [];
   const limitations = impact?.limitations ?? file.limitations ?? [];
   const skeleton = file.skeleton;
@@ -414,7 +422,7 @@ function renderChangedFileContext(file: ChangedFileContext): string {
       </div>
       ${file.error ? `<p class="error">${escapeHtml(file.error)}</p>` : ''}
       <p class="muted">${escapeHtml(impact?.summary ?? dependencySummary(impact, impactedFiles))}</p>
-      ${impactedFiles.length ? listBlock('Impacted files', impactedFiles) : ''}
+      ${impactedFiles.length ? impactedFilesBlock(impactedFiles) : ''}
       ${warnings.length ? detailsList('Warnings', warnings) : ''}
       ${limitations.length ? detailsList('Limitations', limitations) : ''}
       ${renderRelatedResults(file.relatedResults ?? [])}
@@ -541,6 +549,35 @@ function listBlock(title: string, rows: string[]): string {
       <ul>${rows.map((row) => `<li class="mono">${escapeHtml(row)}</li>`).join('')}</ul>
     </div>
   `;
+}
+
+function impactedFilesBlock(files: ImpactedFile[]): string {
+  return `
+    <div class="mini-block">
+      <h4>Impacted files</h4>
+      <ul>
+        ${files
+          .map((file) => {
+            const path = file.file ?? file.filePath ?? file.path ?? 'Unknown file';
+            const hops = file.hops !== null && file.hops !== undefined ? ` · ${file.hops} hop${file.hops === 1 ? '' : 's'}` : '';
+            const reason = file.reason ? ` <span class="reason">— ${escapeHtml(file.reason)} <em>(heuristic)</em></span>` : '';
+            return `<li class="mono">${escapeHtml(path)}${hops}${reason}</li>`;
+          })
+          .join('')}
+      </ul>
+    </div>
+  `;
+}
+
+function normalizeImpactedFiles(
+  impactedFiles?: ImpactedFile[] | string[] | null,
+  directImporters?: string[] | null,
+): ImpactedFile[] {
+  if (Array.isArray(impactedFiles) && impactedFiles.length > 0) {
+    return impactedFiles.map((file) => (typeof file === 'string' ? { file, hops: 1 } : file));
+  }
+
+  return (directImporters ?? []).map((file) => ({ file, hops: 1 }));
 }
 
 function detailsList(title: string, rows: string[]): string {

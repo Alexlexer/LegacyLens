@@ -5,4 +5,6 @@ public sealed record ReportSummary(
     string RepoPath,
     DateTimeOffset GeneratedAtUtc,
     int ChangedFileCount,
-    string LlmProvider);
+    string LlmProvider,
+    string ReportType = Reports.ReportType.DiffReview,
+    string? Title = null);

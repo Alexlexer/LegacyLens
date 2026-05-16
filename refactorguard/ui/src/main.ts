@@ -160,6 +160,8 @@ type ReportSummary = {
   changedFileCount?: number;
   llmProvider?: string;
   providerName?: string;
+  reportType?: string;
+  title?: string | null;
 };
 
 type DotNetFinding = {
@@ -418,6 +420,7 @@ async function runAudit(): Promise<void> {
       }),
     });
     renderAuditReport(report);
+    await loadReports();
   });
 }
 
@@ -687,9 +690,9 @@ async function loadReports(): Promise<void> {
     const items = await api<ReportSummary[]>('/api/reports');
     reports.innerHTML = items.length
       ? items.map(reportItem).join('')
-      : '<p class="empty">No saved reports yet. Run a review to create one.</p>';
+      : '<p class="empty">No saved reports yet. Run a review or audit to create one.</p>';
     reports.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((button) => {
-      button.addEventListener('click', () => viewReport(button.dataset.view ?? ''));
+      button.addEventListener('click', () => viewReport(button.dataset.view ?? '', button.dataset.viewType));
     });
     reports.querySelectorAll<HTMLButtonElement>('[data-delete]').forEach((button) => {
       button.addEventListener('click', () => deleteReport(button.dataset.delete ?? ''));
@@ -699,10 +702,15 @@ async function loadReports(): Promise<void> {
   }
 }
 
-async function viewReport(id: string): Promise<void> {
+async function viewReport(id: string, reportType?: string): Promise<void> {
   await run('Loading report...', async () => {
-    const report = await api<ReviewReport>(`/api/reports/${encodeURIComponent(id)}`);
-    renderReport(report);
+    if (reportType === 'LegacyAudit') {
+      const report = await api<LegacyAuditReport>(`/api/audit/reports/${encodeURIComponent(id)}`);
+      renderAuditReport(report);
+    } else {
+      const report = await api<ReviewReport>(`/api/reports/${encodeURIComponent(id)}`);
+      renderReport(report);
+    }
   });
 }
 
@@ -984,14 +992,22 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 
 function reportItem(report: ReportSummary): string {
   const id = report.reportId ?? report.id ?? '';
+  const type = report.reportType ?? 'DiffReview';
+  const isAudit = type === 'LegacyAudit';
+  const typeBadge = isAudit
+    ? '<span class="badge badge-success" style="font-size:0.68rem">Legacy Audit</span>'
+    : '<span class="badge" style="font-size:0.68rem">Diff Review</span>';
+  const meta = isAudit
+    ? `${formatDate(report.generatedAtUtc ?? report.createdAtUtc)} · ${escapeHtml(report.llmProvider ?? 'Deterministic')}`
+    : `${formatDate(report.generatedAtUtc ?? report.createdAtUtc)} · ${report.changedFileCount ?? 'n/a'} files · ${escapeHtml(report.llmProvider ?? report.providerName ?? 'n/a')}`;
   return `
     <article class="report">
       <div>
         <strong>${escapeHtml(report.repoPath ?? 'Unknown repository')}</strong>
-        <span>${formatDate(report.generatedAtUtc ?? report.createdAtUtc)} · ${report.changedFileCount ?? 'n/a'} files · ${escapeHtml(report.llmProvider ?? report.providerName ?? 'n/a')}</span>
+        <span>${typeBadge} ${meta}</span>
       </div>
       <div class="actions compact">
-        <button class="ghost small" data-view="${escapeHtml(id)}">View</button>
+        <button class="ghost small" data-view="${escapeHtml(id)}" data-view-type="${escapeHtml(type)}">View</button>
         <button class="danger small" data-delete="${escapeHtml(id)}">Delete</button>
       </div>
     </article>

@@ -191,8 +191,10 @@ Configure allowed repository roots before using diff preview:
     },
     "Ollama": {
       "BaseUrl": "http://127.0.0.1:11434",
-      "Model": "qwen2.5-coder:7b",
-      "TimeoutSeconds": 120
+      "Model": "gemma3:4b",
+      "TimeoutSeconds": 180,
+      "AutoPullModel": false,
+      "PullTimeoutSeconds": 600
     },
     "Persistence": {
       "DatabasePath": "data/legacylens.db"
@@ -269,7 +271,7 @@ The UI includes a **Legacy Audit** panel (expandable from the main control panel
 Ollama is optional; deterministic review remains the default and `useLlm=true` is still required for an LLM summary.
 
 ```bash
-ollama pull qwen2.5-coder:7b
+ollama pull gemma3:4b
 ollama serve
 ```
 
@@ -283,11 +285,31 @@ Configure the provider:
     },
     "Ollama": {
       "BaseUrl": "http://127.0.0.1:11434",
-      "Model": "qwen2.5-coder:7b",
-      "TimeoutSeconds": 120
+      "Model": "gemma3:4b",
+      "TimeoutSeconds": 180,
+      "AutoPullModel": false,
+      "PullTimeoutSeconds": 600
     }
   }
 }
 ```
+
+### Ollama model setup
+
+LegacyLens uses Ollama only for optional LLM summaries. `gpu-search-mcp` does **not** use Ollama; it owns repository search and sentence-transformers semantic embeddings.
+
+Recommended local models:
+
+- `gemma3:4b` for audit summaries
+- `qwen2.5-coder:3b` for code-focused reviews
+- `phi4-mini` for fast summaries
+
+Pull manually:
+
+```bash
+ollama pull gemma3:4b
+```
+
+Or use the UI **Ollama model** panel to check `/api/tags` status and explicitly pull the configured model through Ollama's local `/api/pull` endpoint. `AutoPullModel` defaults to `false` to avoid surprise multi-GB downloads. Deterministic mode works without Ollama.
 
 Prompts may contain diffs and code snippets, so use a trusted local/private Ollama instance. Ollama works well with an RTX GPU when configured to use it.

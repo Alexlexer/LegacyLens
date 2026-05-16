@@ -71,6 +71,14 @@ public static class DependencyInjection
             .ValidateDataAnnotations()
             .Validate(options => options.BaseUrl.IsAbsoluteUri, "Ollama BaseUrl must be absolute.")
             .ValidateOnStart();
+        services.AddHttpClient<IOllamaModelService, OllamaModelService>((serviceProvider, client) =>
+        {
+            var options = serviceProvider
+                .GetRequiredService<Microsoft.Extensions.Options.IOptions<OllamaOptions>>()
+                .Value;
+            client.BaseAddress = options.BaseUrl;
+            client.Timeout = TimeSpan.FromSeconds(Math.Max(options.TimeoutSeconds, options.PullTimeoutSeconds));
+        });
         services.AddKeyedSingleton<IReviewLlmProvider, DeterministicReviewLlmProvider>("deterministic");
         services.AddHttpClient<LmStudioReviewLlmProvider>((serviceProvider, client) =>
         {

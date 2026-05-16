@@ -14,4 +14,9 @@ public sealed class OllamaOptions
 
     [Range(1, 600)]
     public int TimeoutSeconds { get; init; } = 120;
+
+    public bool AutoPullModel { get; init; } = false;
+
+    [Range(1, 3600)]
+    public int PullTimeoutSeconds { get; init; } = 600;
 }

@@ -12,6 +12,23 @@ type SearchStatus = {
   error?: string | null;
 };
 
+type OllamaModelStatus = {
+  serverReachable?: boolean;
+  baseUrl?: string;
+  configuredModel?: string;
+  modelInstalled?: boolean;
+  installedModels?: string[];
+  message?: string;
+  error?: string | null;
+};
+
+type OllamaPullResult = {
+  success?: boolean;
+  model?: string;
+  message?: string;
+  error?: string | null;
+};
+
 type GitDiffFile = {
   path?: string;
   filePath?: string;
@@ -306,6 +323,16 @@ app.innerHTML = `
             <button id="auditButton" class="secondary">Run legacy audit</button>
           </div>
         </details>
+        <details class="audit-options">
+          <summary>Ollama model</summary>
+          <div class="stack audit-form">
+            <div id="ollamaStatus" class="muted">Status not checked.</div>
+            <div class="actions compact">
+              <button id="ollamaStatusButton" class="ghost small">Refresh Ollama status</button>
+              <button id="ollamaPullButton" class="secondary small" disabled>Pull configured model</button>
+            </div>
+          </div>
+        </details>
       </div>
       <div class="panel stack">
         <div class="row">
@@ -333,7 +360,10 @@ const output = getElement('output');
 const statusPill = getElement('statusPill');
 const reports = getElement('reports');
 const toast = getElement('toast');
+const ollamaStatus = getElement('ollamaStatus');
 const copyPayloads = new Map<string, string>();
+let currentOllamaStatus: OllamaModelStatus | null = null;
+let isPullingOllamaModel = false;
 
 bind('statusButton', checkStatus);
 bind('previewButton', previewDiff);
@@ -341,6 +371,8 @@ bind('reviewButton', runReview);
 bind('analyzeButton', runAnalysis);
 bind('auditButton', runAudit);
 bind('refreshReportsButton', loadReports);
+bind('ollamaStatusButton', refreshOllamaStatus);
+bind('ollamaPullButton', pullConfiguredOllamaModel);
 
 void loadReports();
 
@@ -358,6 +390,64 @@ async function checkStatus(): Promise<void> {
       ].filter(Boolean),
     );
   });
+}
+
+async function refreshOllamaStatus(): Promise<void> {
+  await run('Checking Ollama...', async () => {
+    currentOllamaStatus = await api<OllamaModelStatus>('/api/llm/ollama/status');
+    renderOllamaStatus(currentOllamaStatus);
+  });
+}
+
+async function pullConfiguredOllamaModel(): Promise<void> {
+  if (isPullingOllamaModel) {
+    return;
+  }
+
+  isPullingOllamaModel = true;
+  updateOllamaPullButton();
+  await run('Pulling Ollama model...', async () => {
+    const result = await api<OllamaPullResult>('/api/llm/ollama/pull', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+
+    if (!result.success) {
+      throw new Error(result.error ? `${result.message} ${result.error}` : result.message ?? 'Ollama pull failed.');
+    }
+
+    showToast(result.message ?? 'Ollama model pulled.');
+    currentOllamaStatus = await api<OllamaModelStatus>('/api/llm/ollama/status');
+    renderOllamaStatus(currentOllamaStatus);
+  });
+  isPullingOllamaModel = false;
+  updateOllamaPullButton();
+}
+
+function renderOllamaStatus(status: OllamaModelStatus): void {
+  const installed = status.installedModels ?? [];
+  const installedText = installed.length <= 5
+    ? installed.join(', ') || 'none'
+    : `${installed.length} installed model(s)`;
+  ollamaStatus.innerHTML = `
+    <div class="meta-grid">
+      ${meta('Reachable', status.serverReachable ? 'Yes' : 'No')}
+      ${meta('Configured model', status.configuredModel)}
+      ${meta('Model installed', status.modelInstalled ? 'Yes' : 'No')}
+      ${meta('Installed', installedText)}
+    </div>
+    <p class="${status.serverReachable && status.modelInstalled ? 'muted' : 'error'}">${escapeHtml(status.message ?? '')}</p>
+    ${status.error ? `<p class="muted">${escapeHtml(status.error)}</p>` : ''}
+  `;
+  updateOllamaPullButton();
+}
+
+function updateOllamaPullButton(): void {
+  const button = document.getElementById('ollamaPullButton') as HTMLButtonElement | null;
+  if (!button) return;
+  const canPull = Boolean(currentOllamaStatus?.serverReachable);
+  button.disabled = !canPull || isPullingOllamaModel;
+  button.textContent = isPullingOllamaModel ? 'Pulling...' : 'Pull configured model';
 }
 
 async function previewDiff(): Promise<void> {

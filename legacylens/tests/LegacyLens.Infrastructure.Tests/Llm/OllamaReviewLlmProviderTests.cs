@@ -16,7 +16,8 @@ public sealed class OllamaReviewLlmProviderTests
             CreateClient(
                 new { message = new { role = "assistant", content = "Ollama summary" }, done = true },
                 inspectRequest: body => requestBody = body),
-            Options.Create(new OllamaOptions { Model = "qwen2.5-coder:7b" }));
+            Options.Create(new OllamaOptions { Model = "qwen2.5-coder:7b" }),
+            new StubModelService(installed: true));
 
         var result = await provider.GenerateReviewAsync(
             new LlmReviewPrompt("repo", [], "diff"),
@@ -42,7 +43,8 @@ public sealed class OllamaReviewLlmProviderTests
             CreateClient(
                 new { message = new { role = "assistant", content = "Ollama summary" }, done = true },
                 inspectRequest: body => requestBody = body),
-            Options.Create(new OllamaOptions { Model = "qwen2.5-coder:7b" }));
+            Options.Create(new OllamaOptions { Model = "qwen2.5-coder:7b" }),
+            new StubModelService(installed: true));
         var context = new GpuSearchReviewContext(
             true,
             [
@@ -74,7 +76,8 @@ public sealed class OllamaReviewLlmProviderTests
     {
         var provider = new OllamaReviewLlmProvider(
             CreateClient(new { message = new { role = "assistant", content = "" }, done = true }),
-            Options.Create(new OllamaOptions { Model = "qwen2.5-coder:7b" }));
+            Options.Create(new OllamaOptions { Model = "qwen2.5-coder:7b" }),
+            new StubModelService(installed: true));
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             provider.GenerateReviewAsync(new LlmReviewPrompt("repo", [], "diff"), CancellationToken.None));
@@ -87,12 +90,44 @@ public sealed class OllamaReviewLlmProviderTests
     {
         var provider = new OllamaReviewLlmProvider(
             CreateClient(new { error = "failed" }, HttpStatusCode.InternalServerError),
-            Options.Create(new OllamaOptions { Model = "qwen2.5-coder:7b" }));
+            Options.Create(new OllamaOptions { Model = "qwen2.5-coder:7b" }),
+            new StubModelService(installed: true));
 
         var ex = await Assert.ThrowsAsync<HttpRequestException>(() =>
             provider.GenerateReviewAsync(new LlmReviewPrompt("repo", [], "diff"), CancellationToken.None));
 
         Assert.Contains("Ollama returned 500", ex.Message);
+    }
+
+    [Fact]
+    public async Task GenerateReviewAsync_DoesNotPullAutomatically_WhenAutoPullDisabled()
+    {
+        var modelService = new StubModelService(installed: false);
+        var provider = new OllamaReviewLlmProvider(
+            CreateClient(new { message = new { role = "assistant", content = "unused" }, done = true }),
+            Options.Create(new OllamaOptions { Model = "gemma3:4b", AutoPullModel = false }),
+            modelService);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            provider.GenerateReviewAsync(new LlmReviewPrompt("repo", [], "diff"), CancellationToken.None));
+
+        Assert.Contains("ollama pull gemma3:4b", ex.Message);
+        Assert.Equal(0, modelService.PullCount);
+    }
+
+    [Fact]
+    public async Task GenerateReviewAsync_PullsMissingModel_WhenAutoPullEnabled()
+    {
+        var modelService = new StubModelService(installed: false, pullSucceeds: true);
+        var provider = new OllamaReviewLlmProvider(
+            CreateClient(new { message = new { role = "assistant", content = "Ollama summary" }, done = true }),
+            Options.Create(new OllamaOptions { Model = "gemma3:4b", AutoPullModel = true }),
+            modelService);
+
+        var result = await provider.GenerateReviewAsync(new LlmReviewPrompt("repo", [], "diff"), CancellationToken.None);
+
+        Assert.Equal("Ollama summary", result);
+        Assert.Equal(1, modelService.PullCount);
     }
 
     private static HttpClient CreateClient(
@@ -127,5 +162,29 @@ public sealed class OllamaReviewLlmProviderTests
                 Content = new StringContent(json)
             };
         }
+    }
+
+    private sealed class StubModelService(bool installed, bool pullSucceeds = true) : IOllamaModelService
+    {
+        public int PullCount { get; private set; }
+
+        public Task<OllamaModelStatus> GetStatusAsync(CancellationToken cancellationToken)
+            => Task.FromResult(new OllamaModelStatus(
+                true,
+                "http://127.0.0.1:11434",
+                "gemma3:4b",
+                installed,
+                installed ? ["gemma3:4b"] : [],
+                installed ? "installed" : "missing"));
+
+        public Task<OllamaPullResult> PullConfiguredModelAsync(CancellationToken cancellationToken)
+        {
+            PullCount++;
+            installed = pullSucceeds;
+            return Task.FromResult(new OllamaPullResult(pullSucceeds, "gemma3:4b", pullSucceeds ? "pulled" : "failed", pullSucceeds ? null : "error"));
+        }
+
+        public Task<OllamaPullResult> PullModelAsync(string model, CancellationToken cancellationToken)
+            => PullConfiguredModelAsync(cancellationToken);
     }
 }

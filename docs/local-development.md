@@ -216,7 +216,7 @@ LM Studio is optional. Deterministic review remains the safe default unless `use
 Ollama is optional. Deterministic review remains the safe default unless `useLlm` is true and the provider is configured for Ollama.
 
 ```bash
-ollama pull qwen2.5-coder:7b
+ollama pull gemma3:4b
 ollama serve
 ```
 
@@ -228,11 +228,32 @@ ollama serve
     },
     "Ollama": {
       "BaseUrl": "http://127.0.0.1:11434",
-      "Model": "qwen2.5-coder:7b",
-      "TimeoutSeconds": 120
+      "Model": "gemma3:4b",
+      "TimeoutSeconds": 180,
+      "AutoPullModel": false,
+      "PullTimeoutSeconds": 600
     }
   }
 }
 ```
 
 `useLlm=true` is still required for an LLM summary. Prompts may contain code snippets and diffs, so use a trusted local/private Ollama instance. Ollama works well with an RTX GPU when configured to use it.
+
+### Ollama model setup
+
+LegacyLens uses Ollama for optional local chat summaries only. `gpu-search-mcp` does not use Ollama; it uses its own sentence-transformers embeddings for semantic search.
+
+Good small local models:
+
+- `gemma3:4b` for audit summaries
+- `qwen2.5-coder:3b` for code-focused review
+- `phi4-mini` for fast summaries
+
+Check and pull models from the UI **Ollama model** panel, or call:
+
+```text
+GET /api/llm/ollama/status
+POST /api/llm/ollama/pull
+```
+
+Pulls are explicit by default. `AutoPullModel=false` avoids surprise multi-GB downloads; set it to `true` only if you want LegacyLens to pull a missing configured model before an Ollama chat call.

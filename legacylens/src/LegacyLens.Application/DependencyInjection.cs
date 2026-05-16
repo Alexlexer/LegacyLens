@@ -28,6 +28,7 @@ public static class DependencyInjection
         services.AddScoped<IAuditProvider, RecommendedNextStepsAuditProvider>();
         services.AddScoped<ILegacyAuditOrchestrator, LegacyAuditOrchestrator>();
         services.AddSingleton<ILegacyAuditMarkdownFormatter, LegacyAuditMarkdownFormatter>();
+        services.AddSingleton<IAuditReportExportService, AuditReportExportService>();
         services.TryAddScoped<IReportRepository, NullReportRepository>();
         return services;
     }

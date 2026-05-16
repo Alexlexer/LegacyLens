@@ -147,6 +147,15 @@ DELETE /api/reports/{id}
 
 The UI report list shows both **Diff Review** and **Legacy Audit** report types with a type badge. Each saved report can be viewed or deleted. Legacy Audit reports are loaded from `GET /api/audit/reports/{id}` and rendered with the same audit panel used for live results; Diff Review reports are loaded from `GET /api/reports/{id}` and rendered in the review panel.
 
+Saved Legacy Audit reports can be exported as local Markdown or self-contained HTML files:
+
+```text
+GET /api/audit/reports/{id}/export/markdown
+GET /api/audit/reports/{id}/export/html
+```
+
+Exports are download-only and may contain repository paths, snippets, findings, and optional LLM summaries. Review exported files before sharing outside your local environment.
+
 The UI report viewer renders structured sections for summary metadata, findings, gpu-search context, LM Studio summaries, and raw Markdown. It also shows confidence, warnings, limitations, related search results, skeleton previews, and copy buttons for Markdown/context/summary.
 
 Optionally request a local LLM-enhanced summary:
@@ -253,7 +262,7 @@ Good candidate repositories include:
 - **Recommended next steps** — deterministic, derived from detected findings.
 - **LLM summary** — optional. Uses the configured local LLM provider (LM Studio or Ollama). Advisory only.
 
-The UI includes a **Legacy Audit** panel (expandable from the main control panel) with per-option checkboxes and a "Run legacy audit" button. After each audit completes, the report is automatically saved to SQLite and appears in the saved reports list immediately. Audit reports can be reopened and deleted from the saved reports list like diff review reports. The SQLite database is local and not shared.
+The UI includes a **Legacy Audit** panel (expandable from the main control panel) with per-option checkboxes and a "Run legacy audit" button. After each audit completes, the report is automatically saved to SQLite and appears in the saved reports list immediately. Audit reports can be reopened, deleted, or exported as Markdown/HTML from the saved reports list. The SQLite database is local and not shared.
 
 ## Ollama provider
 

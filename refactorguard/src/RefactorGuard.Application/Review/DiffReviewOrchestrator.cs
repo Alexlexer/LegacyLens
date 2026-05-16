@@ -115,13 +115,17 @@ public sealed class DiffReviewOrchestrator(
                 .Where(f => f.Hops == 1)
                 .Select(f => f.File)
                 .ToList();
+            var impactedFiles = impactResponse.ImpactedFiles
+                .Select(f => new DependencyImpactedFile(f.File, f.Hops, f.Reason))
+                .ToList();
             impact = new DependencyImpactSummary(
                 impactResponse.ImpactedFiles.Count,
                 directImporters,
                 impactResponse.Confidence,
                 impactResponse.AnalysisMode,
                 impactResponse.Limitations,
-                impactResponse.Warnings);
+                impactResponse.Warnings,
+                impactedFiles);
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
         {

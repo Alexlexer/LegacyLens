@@ -18,7 +18,13 @@ public sealed record DependencyImpactSummary(
     string? Confidence = null,
     string? AnalysisMode = null,
     IReadOnlyList<string>? Limitations = null,
-    IReadOnlyList<string>? Warnings = null);
+    IReadOnlyList<string>? Warnings = null,
+    IReadOnlyList<DependencyImpactedFile>? ImpactedFiles = null);
+
+public sealed record DependencyImpactedFile(
+    string File,
+    int Hops,
+    string? Reason = null);
 
 public sealed record SkeletonSummary(string Content, string? Language);
 

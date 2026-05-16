@@ -92,6 +92,15 @@ public sealed class LmStudioReviewLlmProvider(
                 var limitations = di.Limitations ?? [];
                 foreach (var limitation in limitations)
                     sb.AppendLine($"    Limitation: {limitation}");
+
+                var impactedFiles = di.ImpactedFiles ?? [];
+                foreach (var impacted in impactedFiles.Take(5))
+                {
+                    var reason = string.IsNullOrWhiteSpace(impacted.Reason)
+                        ? "reason unavailable"
+                        : $"{impacted.Reason} (heuristic)";
+                    sb.AppendLine($"    Impacted: {impacted.File}: {reason}");
+                }
             }
 
             if (file.RelatedResults.Count > 0)

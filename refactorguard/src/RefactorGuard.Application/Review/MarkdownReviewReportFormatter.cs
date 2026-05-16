@@ -97,10 +97,20 @@ public sealed class MarkdownReviewReportFormatter : IReviewReportFormatter
                 if (di.AnalysisMode is not null)
                     markdown.AppendLine($"- Analysis mode: {di.AnalysisMode}");
 
-                if (di.DirectImporters.Count > 0)
+                var impactedFiles = di.ImpactedFiles ?? di.DirectImporters
+                    .Select(file => new DependencyImpactedFile(file, 1))
+                    .ToList();
+
+                if (impactedFiles.Count > 0)
                 {
-                    var importers = string.Join(", ", di.DirectImporters.Take(5).Select(f => $"`{f}`"));
-                    markdown.AppendLine($"- Direct importers: {importers}");
+                    markdown.AppendLine("- Impacted file details:");
+                    foreach (var impacted in impactedFiles.Take(10))
+                    {
+                        var reason = string.IsNullOrWhiteSpace(impacted.Reason)
+                            ? string.Empty
+                            : $" — {impacted.Reason}";
+                        markdown.AppendLine($"  - `{impacted.File}` (hops: {impacted.Hops}){reason}");
+                    }
                 }
 
                 var warnings = di.Warnings ?? [];

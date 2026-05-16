@@ -166,6 +166,43 @@ public sealed class MarkdownReviewReportFormatterTests
     }
 
     [Fact]
+    public void Format_ShowsDependencyImpactReasons_WhenPresent()
+    {
+        var context = new GpuSearchReviewContext(
+            true,
+            [
+                new ChangedFileContext(
+                    "src/UserService.cs",
+                    new DependencyImpactSummary(
+                        1,
+                        ["src/UserController.cs"],
+                        ImpactedFiles:
+                        [
+                            new DependencyImpactedFile(
+                                "src/UserController.cs",
+                                1,
+                                "references type UserService")
+                        ]),
+                    null,
+                    [])
+            ]);
+        var report = new DiffReviewReport(
+            "report-8",
+            "repo",
+            DateTimeOffset.UnixEpoch,
+            1,
+            [new GitDiffFile("src/UserService.cs", "M", 2, 0)],
+            [],
+            string.Empty,
+            GpuSearchContext: context);
+
+        var markdown = new MarkdownReviewReportFormatter().Format(report);
+
+        Assert.Contains("src/UserController.cs", markdown);
+        Assert.Contains("references type UserService", markdown);
+    }
+
+    [Fact]
     public void Format_OmitsLimitationsBlock_WhenLimitationsAbsent()
     {
         var context = new GpuSearchReviewContext(

@@ -1,8 +1,10 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using RefactorGuard.Application.DotNetAnalysis;
 using RefactorGuard.Application.Git;
 using RefactorGuard.Application.Review;
 using RefactorGuard.Application.Search;
+using RefactorGuard.Infrastructure.DotNetAnalysis;
 using RefactorGuard.Infrastructure.Git;
 using RefactorGuard.Infrastructure.GpuSearch;
 using RefactorGuard.Infrastructure.Llm;
@@ -22,6 +24,11 @@ public static class DependencyInjection
             Prefer(configuration, "LegacyLens:AllowedRoots", "RefactorGuard:AllowedRoots")
                 .Get<string[]>() ?? []));
         services.AddScoped<IGitDiffService, GitDiffService>();
+        services.AddScoped<IDotNetWorkspaceDiscovery, DotNetWorkspaceDiscovery>();
+        services.AddScoped<RoslynWorkspaceLoader>();
+        services.AddScoped<IRoslynWorkspaceLoader>(serviceProvider =>
+            serviceProvider.GetRequiredService<RoslynWorkspaceLoader>());
+        services.AddScoped<IRoslynSymbolScanner, RoslynSymbolScanner>();
         services.AddOptions<GpuSearchOptions>()
             .Bind(Prefer(configuration, "LegacyLens:GpuSearch", GpuSearchOptions.SectionName))
             .ValidateDataAnnotations()

@@ -146,6 +146,19 @@ Use `GET /api/search/status` to verify connectivity without running a review.
 
 Use `POST /api/dotnet/analyze` to run .NET analysis presets through `gpu-search-mcp`. Supported presets include `async-blocking`, `broad-exceptions`, `entity-framework-n-plus-one`, and `nullable-suppression`.
 
+## Roslyn workspace scanning
+
+LegacyLens has a foundational compiler-aware .NET layer backed by Roslyn. Workspace discovery supports `.slnx`, `.sln`, and `.csproj` files, prefers `.slnx` over `.sln`, and ignores generated/tooling folders such as `bin`, `obj`, `.git`, `.vs`, `node_modules`, and `packages`.
+
+Use the read-only debug scan endpoint:
+
+```text
+POST /api/dotnet/workspace/scan
+{ "repoPath": "D:\\Projects\\ExampleRepo" }
+```
+
+The response includes the selected workspace, warnings, project/document counts, symbol count, and the first 50 symbols. `gpu-search-mcp` remains the fast retrieval layer; Roslyn will provide compiler-aware facts. Dependency impact remains heuristic until later Roslyn reference analysis is added.
+
 ## Report Persistence
 
 Diff review reports are saved to SQLite. The default database path is `data/legacylens.db` relative to the API working directory:

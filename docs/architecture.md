@@ -48,6 +48,14 @@ When requested, the review workflow can enrich the deterministic report through 
 
 `POST /api/dotnet/analyze` uses the same client to run preset hybrid searches for common .NET review risks. Preset definitions live in Application so they remain testable and independent of HTTP details.
 
+## Roslyn .NET Analysis Foundation
+
+LegacyLens is beginning a compiler-aware .NET layer backed by Roslyn. The first foundation discovers `.slnx`, `.sln`, and `.csproj` workspaces, loads them through `MSBuildWorkspace` when supported by the local SDK/MSBuild installation, and extracts basic C# symbols: namespaces, types, methods, and properties.
+
+`gpu-search-mcp` remains the fast retrieval layer for heuristic search, related code, and dependency impact. Roslyn will provide precise compiler-aware facts in later milestones. Dependency impact remains heuristic until Roslyn reference analysis is added.
+
+The debug endpoint `POST /api/dotnet/workspace/scan` validates the repository path, reports the selected workspace candidate, and returns workspace counts plus the first 50 symbols. This endpoint is read-only and does not modify or restore project files explicitly.
+
 ## Report Persistence
 
 `IReportRepository` is defined in Application. Infrastructure provides a SQLite implementation that stores full review reports as JSON plus indexed summary fields for listing. The review orchestrator saves each generated report.

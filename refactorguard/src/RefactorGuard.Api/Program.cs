@@ -7,6 +7,7 @@ using RefactorGuard.Application.Search;
 using RefactorGuard.Domain.Common;
 using RefactorGuard.Domain.Git;
 using RefactorGuard.Infrastructure;
+using RefactorGuard.Infrastructure.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -49,6 +50,35 @@ app.MapPost("/api/dotnet/analyze", async (
         return Results.BadRequest(new ProblemDetailsResponse(
             "https://refactorguard.local/errors/gpu-search-unavailable",
             "gpu-search-mcp unavailable",
+            StatusCodes.Status400BadRequest,
+            ex.Message));
+    }
+});
+app.MapPost("/api/dotnet/workspace/scan", async (
+    DotNetWorkspaceScanRequest request,
+    IRepoPathValidator repoPathValidator,
+    IRoslynSymbolScanner symbolScanner,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var repoPath = repoPathValidator.Validate(request.RepoPath ?? string.Empty);
+        var response = await symbolScanner.ScanAsync(repoPath, cancellationToken);
+        return Results.Ok(response);
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new ProblemDetailsResponse(
+            "https://refactorguard.local/errors/invalid-dotnet-workspace-scan-request",
+            "Invalid .NET workspace scan request",
+            StatusCodes.Status400BadRequest,
+            ex.Message));
+    }
+    catch (UnauthorizedAccessException ex)
+    {
+        return Results.BadRequest(new ProblemDetailsResponse(
+            "https://refactorguard.local/errors/invalid-repo-path",
+            "Invalid repository path",
             StatusCodes.Status400BadRequest,
             ex.Message));
     }

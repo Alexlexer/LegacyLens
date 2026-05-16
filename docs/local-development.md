@@ -157,7 +157,16 @@ POST /api/dotnet/workspace/scan
 { "repoPath": "D:\\Projects\\ExampleRepo" }
 ```
 
-The response includes the selected workspace, warnings, project/document counts, symbol count, and the first 50 symbols. `gpu-search-mcp` remains the fast retrieval layer; Roslyn will provide compiler-aware facts. Dependency impact remains heuristic until later Roslyn reference analysis is added.
+The response includes the selected workspace, warnings, project/document counts, symbol count, and the first 50 symbols.
+
+Use Roslyn reference analysis:
+
+```text
+POST /api/dotnet/references
+{ "repoPath": "D:\\Projects\\ExampleRepo", "symbolName": "UserService" }
+```
+
+This returns matched C# symbols plus source references found by Roslyn. Reference analysis is compiler-aware and C#/.NET-specific. `gpu-search-mcp` remains the fast broad retrieval layer; review reports are not yet fully powered by Roslyn reference data. Future work will merge Roslyn references into review impact analysis.
 
 ## Report Persistence
 

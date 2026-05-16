@@ -65,6 +65,7 @@ public sealed class RoslynWorkspaceLoader : IRoslynWorkspaceLoader
 
             return new LoadedRoslynWorkspace(
                 workspace,
+                solution,
                 projects,
                 new RoslynWorkspaceLoadResult(
                     true,
@@ -109,11 +110,12 @@ public sealed class RoslynWorkspaceLoader : IRoslynWorkspaceLoader
 
     internal sealed record LoadedRoslynWorkspace(
         Workspace? Workspace,
+        Solution? Solution,
         IReadOnlyList<Project> Projects,
         RoslynWorkspaceLoadResult Result) : IDisposable
     {
         public static LoadedRoslynWorkspace Failed(RoslynWorkspaceLoadResult result)
-            => new(null, [], result);
+            => new(null, null, [], result);
 
         public void Dispose()
         {

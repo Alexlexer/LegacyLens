@@ -6,8 +6,7 @@ using LegacyLens.Application.DotNetAnalysis;
 namespace LegacyLens.Infrastructure.DotNetAnalysis;
 
 public sealed class RoslynDependencyInjectionAnalyzer(
-    IDotNetWorkspaceDiscovery workspaceDiscovery,
-    RoslynWorkspaceLoader workspaceLoader) : IRoslynDependencyInjectionAnalyzer
+    IRoslynWorkspaceCache workspaceCache) : IRoslynDependencyInjectionAnalyzer
 {
     private static readonly HashSet<string> RegistrationMethods = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -20,62 +19,59 @@ public sealed class RoslynDependencyInjectionAnalyzer(
         string repoPath,
         CancellationToken cancellationToken)
     {
-        var discovery = await workspaceDiscovery.DiscoverAsync(repoPath, cancellationToken);
-        var loaded = await workspaceLoader.LoadWorkspaceForScanAsync(discovery, cancellationToken);
+        using var lease = await workspaceCache.GetOrLoadAsync(repoPath, cancellationToken);
+        var loaded = lease.Workspace;
 
-        using (loaded)
+        if (!loaded.Result.Success || loaded.Solution is null)
         {
-            if (!loaded.Result.Success || loaded.Solution is null)
-            {
-                return new DependencyInjectionAnalysisResult(
-                    false,
-                    loaded.Result.WorkspacePath,
-                    loaded.Result.WorkspaceKind,
-                    [],
-                    [],
-                    [],
-                    loaded.Result.Warnings,
-                    loaded.Result.ErrorMessage);
-            }
-
-            var registrations = new List<ServiceRegistrationInfo>();
-            var constructorDependencies = new List<ConstructorDependencyInfo>();
-
-            foreach (var project in loaded.Projects)
-            {
-                var compilation = await project.GetCompilationAsync(cancellationToken);
-                if (compilation is null)
-                    continue;
-
-                foreach (var document in project.Documents)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    var syntaxRoot = await document.GetSyntaxRootAsync(cancellationToken);
-                    var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-
-                    if (syntaxRoot is null || semanticModel is null || document.FilePath is null)
-                        continue;
-
-                    registrations.AddRange(
-                        CollectRegistrations(syntaxRoot, semanticModel, document.FilePath, project.Name));
-                    constructorDependencies.AddRange(
-                        CollectConstructorDependencies(syntaxRoot, semanticModel, document.FilePath, project.Name));
-                }
-            }
-
-            var findings = BuildFindings(registrations, constructorDependencies);
-
             return new DependencyInjectionAnalysisResult(
-                true,
+                false,
                 loaded.Result.WorkspacePath,
                 loaded.Result.WorkspaceKind,
-                registrations,
-                constructorDependencies,
-                findings,
+                [],
+                [],
+                [],
                 loaded.Result.Warnings,
-                null);
+                loaded.Result.ErrorMessage);
         }
+
+        var registrations = new List<ServiceRegistrationInfo>();
+        var constructorDependencies = new List<ConstructorDependencyInfo>();
+
+        foreach (var project in loaded.Projects)
+        {
+            var compilation = await project.GetCompilationAsync(cancellationToken);
+            if (compilation is null)
+                continue;
+
+            foreach (var document in project.Documents)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var syntaxRoot = await document.GetSyntaxRootAsync(cancellationToken);
+                var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+
+                if (syntaxRoot is null || semanticModel is null || document.FilePath is null)
+                    continue;
+
+                registrations.AddRange(
+                    CollectRegistrations(syntaxRoot, semanticModel, document.FilePath, project.Name));
+                constructorDependencies.AddRange(
+                    CollectConstructorDependencies(syntaxRoot, semanticModel, document.FilePath, project.Name));
+            }
+        }
+
+        var findings = BuildFindings(registrations, constructorDependencies);
+
+        return new DependencyInjectionAnalysisResult(
+            true,
+            loaded.Result.WorkspacePath,
+            loaded.Result.WorkspaceKind,
+            registrations,
+            constructorDependencies,
+            findings,
+            loaded.Result.Warnings,
+            null);
     }
 
     private static IEnumerable<ServiceRegistrationInfo> CollectRegistrations(

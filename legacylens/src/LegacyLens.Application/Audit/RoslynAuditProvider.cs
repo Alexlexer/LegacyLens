@@ -3,7 +3,6 @@ using LegacyLens.Application.DotNetAnalysis;
 namespace LegacyLens.Application.Audit;
 
 public sealed class RoslynAuditProvider(
-    IRoslynWorkspaceLoader workspaceLoader,
     IRoslynSymbolScanner symbolScanner) : IAuditProvider
 {
     public string Name => "Roslyn";
@@ -17,7 +16,8 @@ public sealed class RoslynAuditProvider(
 
         try
         {
-            var loadResult = await workspaceLoader.LoadAsync(context.WorkspaceDiscovery, cancellationToken);
+            var scanResponse = await symbolScanner.ScanAsync(context.RepoPath, cancellationToken);
+            var loadResult = scanResponse.LoadResult;
 
             if (!loadResult.Success)
             {
@@ -41,7 +41,6 @@ public sealed class RoslynAuditProvider(
                         loadResult.ErrorMessage));
             }
 
-            var scanResponse = await symbolScanner.ScanAsync(context.RepoPath, cancellationToken);
             var classCount = scanResponse.Symbols.Count(s => s.Kind == "class");
             var interfaceCount = scanResponse.Symbols.Count(s => s.Kind == "interface");
             var methodCount = scanResponse.Symbols.Count(s => s.Kind == "method");

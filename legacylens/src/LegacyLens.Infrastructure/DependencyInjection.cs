@@ -24,9 +24,15 @@ public static class DependencyInjection
             Prefer(configuration, "LegacyLens:AllowedRoots", "RefactorGuard:AllowedRoots")
                 .Get<string[]>() ?? []));
         services.AddScoped<IGitDiffService, GitDiffService>();
-        services.AddScoped<IDotNetWorkspaceDiscovery, DotNetWorkspaceDiscovery>();
-        services.AddScoped<RoslynWorkspaceLoader>();
-        services.AddScoped<IRoslynWorkspaceLoader>(serviceProvider =>
+        services.AddSingleton<IDotNetWorkspaceDiscovery, DotNetWorkspaceDiscovery>();
+        services.AddSingleton<RoslynWorkspaceLoader>();
+        services.AddOptions<RoslynOptions>()
+            .Bind(Prefer(configuration, "LegacyLens:Roslyn", RoslynOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<IRoslynWorkspaceCache, RoslynWorkspaceCache>();
+        services.AddSingleton<IRoslynWorkspaceLoader>(serviceProvider =>
             serviceProvider.GetRequiredService<RoslynWorkspaceLoader>());
         services.AddScoped<IRoslynSymbolScanner, RoslynSymbolScanner>();
         services.AddScoped<IRoslynReferenceAnalyzer, RoslynReferenceAnalyzer>();

@@ -54,6 +54,22 @@ LegacyLens is beginning a compiler-aware .NET layer backed by Roslyn. The founda
 
 Roslyn also provides C# symbol reference analysis through `SymbolFinder.FindReferencesAsync`. This is compiler-aware and .NET-specific, while `gpu-search-mcp` remains the fast broad retrieval layer for heuristic search, related code, and dependency impact.
 
+Roslyn workspace loading is cached in memory to reduce repeated MSBuild/Roslyn load cost across audits, diff review enrichment, symbol scanning, reference analysis, and DI analysis. The cache is read-only and keyed by repository path. Entries are invalidated by a lightweight source fingerprint (selected workspace path, solution/project timestamps, C# file count/max timestamp, and common config timestamps), TTL, or explicit invalidation. Configure it under `LegacyLens:Roslyn`:
+
+```json
+{
+  "LegacyLens": {
+    "Roslyn": {
+      "EnableWorkspaceCache": true,
+      "MaxCachedWorkspaces": 3,
+      "CacheTtlMinutes": 30
+    }
+  }
+}
+```
+
+Disable the cache for troubleshooting or reduce `CacheTtlMinutes` when rapidly changing large solutions. The cache never writes to analyzed repositories.
+
 The debug endpoint `POST /api/dotnet/workspace/scan` validates the repository path, reports the selected workspace candidate, and returns workspace counts plus the first 50 symbols. This endpoint is read-only and does not modify or restore project files explicitly.
 
 `POST /api/dotnet/references` resolves a requested C# symbol name/full name and returns matched symbols plus source references. Review reports are not yet powered by Roslyn reference data; future work can merge Roslyn references with gpu-search context for more precise impact analysis.

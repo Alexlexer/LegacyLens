@@ -340,7 +340,7 @@ public sealed class LegacyAuditOrchestratorTests : IDisposable
             new StubWorkspaceDiscovery(),
             [
                 new TechnologySignalAuditProvider(),
-                new RoslynAuditProvider(new StubWorkspaceLoader(), new StubSymbolScanner()),
+                new RoslynAuditProvider(new StubSymbolScanner()),
                 new DependencyInjectionAuditProvider(diAnalyzer ?? new NullDiAnalyzer()),
                 new GpuSearchSignalAuditProvider(gpuSearchClient),
                 new ArchitectureSignalAuditProvider(),

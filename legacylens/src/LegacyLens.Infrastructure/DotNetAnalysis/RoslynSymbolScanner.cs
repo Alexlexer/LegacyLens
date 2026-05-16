@@ -6,30 +6,26 @@ using LegacyLens.Application.DotNetAnalysis;
 namespace LegacyLens.Infrastructure.DotNetAnalysis;
 
 public sealed class RoslynSymbolScanner(
-    IDotNetWorkspaceDiscovery discovery,
-    RoslynWorkspaceLoader workspaceLoader) : IRoslynSymbolScanner
+    IRoslynWorkspaceCache workspaceCache) : IRoslynSymbolScanner
 {
     public async Task<DotNetWorkspaceScanResponse> ScanAsync(
         string repoRoot,
         CancellationToken cancellationToken)
     {
-        var discoveryResult = await discovery.DiscoverAsync(repoRoot, cancellationToken);
-        var loaded = await workspaceLoader.LoadWorkspaceForScanAsync(discoveryResult, cancellationToken);
-        using (loaded)
-        {
-            var symbols = loaded.Result.Success
-                ? await ScanProjectsAsync(loaded.Projects, cancellationToken)
-                : [];
+        using var lease = await workspaceCache.GetOrLoadAsync(repoRoot, cancellationToken);
+        var loaded = lease.Workspace;
+        var symbols = loaded.Result.Success
+            ? await ScanProjectsAsync(loaded.Projects, cancellationToken)
+            : [];
 
-            return new DotNetWorkspaceScanResponse(
-                discoveryResult.Selected,
-                discoveryResult.Warnings.Concat(loaded.Result.Warnings).Distinct().ToList(),
-                loaded.Result.ProjectCount,
-                loaded.Result.DocumentCount,
-                symbols.Count,
-                symbols.Take(50).ToList(),
-                loaded.Result);
-        }
+        return new DotNetWorkspaceScanResponse(
+            lease.DiscoveryResult.Selected,
+            lease.DiscoveryResult.Warnings.Concat(loaded.Result.Warnings).Distinct().ToList(),
+            loaded.Result.ProjectCount,
+            loaded.Result.DocumentCount,
+            symbols.Count,
+            symbols.Take(50).ToList(),
+            loaded.Result);
     }
 
     private static async Task<IReadOnlyList<DotNetSymbolInfo>> ScanProjectsAsync(

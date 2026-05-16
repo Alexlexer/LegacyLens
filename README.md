@@ -139,7 +139,7 @@ DELETE /api/reports/{id}
 
 The UI report viewer renders structured sections for summary metadata, findings, gpu-search context, LM Studio summaries, and raw Markdown. It also shows confidence, warnings, limitations, related search results, skeleton previews, and copy buttons for Markdown/context/summary.
 
-Optionally request an LM Studio-enhanced summary:
+Optionally request a local LLM-enhanced summary:
 
 ```json
 { "repoPath": "D:\\Projects\\SomeRepo", "useLlm": true }
@@ -163,6 +163,11 @@ Configure allowed repository roots before using diff preview:
       "Model": "local-model",
       "TimeoutSeconds": 60
     },
+    "Ollama": {
+      "BaseUrl": "http://127.0.0.1:11434",
+      "Model": "qwen2.5-coder:7b",
+      "TimeoutSeconds": 120
+    },
     "Persistence": {
       "DatabasePath": "data/legacylens.db"
     }
@@ -171,3 +176,31 @@ Configure allowed repository roots before using diff preview:
 ```
 
 The `RefactorGuard` config section is also accepted for backward compatibility.
+
+## Ollama provider
+
+Ollama is optional; deterministic review remains the default and `useLlm=true` is still required for an LLM summary.
+
+```bash
+ollama pull qwen2.5-coder:7b
+ollama serve
+```
+
+Configure the provider:
+
+```json
+{
+  "LegacyLens": {
+    "Review": {
+      "Provider": "Ollama"
+    },
+    "Ollama": {
+      "BaseUrl": "http://127.0.0.1:11434",
+      "Model": "qwen2.5-coder:7b",
+      "TimeoutSeconds": 120
+    }
+  }
+}
+```
+
+Prompts may contain diffs and code snippets, so use a trusted local/private Ollama instance. Ollama works well with an RTX GPU when configured to use it.

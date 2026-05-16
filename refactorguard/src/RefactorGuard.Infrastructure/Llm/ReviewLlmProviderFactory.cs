@@ -25,6 +25,7 @@ public sealed class ReviewLlmProviderFactory(
             {
                 "deterministic" => serviceProvider.GetRequiredKeyedService<IReviewLlmProvider>("deterministic"),
                 "lmstudio" or "lm-studio" => serviceProvider.GetRequiredKeyedService<IReviewLlmProvider>("lmstudio"),
+                "ollama" => serviceProvider.GetRequiredKeyedService<IReviewLlmProvider>("ollama"),
                 _ => throw new InvalidOperationException($"Unsupported LLM provider '{options.Value.Provider}'.")
             };
         }

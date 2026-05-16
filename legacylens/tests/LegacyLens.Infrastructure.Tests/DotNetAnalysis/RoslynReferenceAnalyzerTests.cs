@@ -1,5 +1,6 @@
 using LegacyLens.Application.DotNetAnalysis;
 using LegacyLens.Infrastructure.DotNetAnalysis;
+using Microsoft.Extensions.Options;
 
 namespace LegacyLens.Infrastructure.Tests.DotNetAnalysis;
 
@@ -170,7 +171,14 @@ public sealed class RoslynReferenceAnalyzerTests : IDisposable
     }
 
     private RoslynReferenceAnalyzer CreateAnalyzer()
-        => new(new DotNetWorkspaceDiscovery(), new RoslynWorkspaceLoader());
+        => new(CreateCache());
+
+    private static RoslynWorkspaceCache CreateCache()
+        => new(
+            new DotNetWorkspaceDiscovery(),
+            new RoslynWorkspaceLoader(),
+            Options.Create(new RoslynOptions()),
+            TimeProvider.System);
 
     private void WriteProject(string code)
     {

@@ -7,8 +7,7 @@ using LegacyLens.Application.DotNetAnalysis;
 namespace LegacyLens.Infrastructure.DotNetAnalysis;
 
 public sealed class RoslynReferenceAnalyzer(
-    IDotNetWorkspaceDiscovery discovery,
-    RoslynWorkspaceLoader workspaceLoader) : IRoslynReferenceAnalyzer
+    IRoslynWorkspaceCache workspaceCache) : IRoslynReferenceAnalyzer
 {
     private const int MaxMatchedSymbols = 10;
     private const int MaxReferencesPerSymbol = 100;
@@ -23,70 +22,67 @@ public sealed class RoslynReferenceAnalyzer(
         if (string.IsNullOrWhiteSpace(request.SymbolName))
             throw new ArgumentException("Symbol name is required.", nameof(request));
 
-        var discoveryResult = await discovery.DiscoverAsync(request.RepoPath, cancellationToken);
-        var loaded = await workspaceLoader.LoadWorkspaceForScanAsync(discoveryResult, cancellationToken);
-        using (loaded)
+        using var lease = await workspaceCache.GetOrLoadAsync(request.RepoPath, cancellationToken);
+        var loaded = lease.Workspace;
+        if (!loaded.Result.Success || loaded.Solution is null)
         {
-            if (!loaded.Result.Success || loaded.Solution is null)
-            {
-                return new RoslynReferenceAnalysisResult(
-                    false,
-                    loaded.Result.WorkspacePath,
-                    loaded.Result.WorkspaceKind,
-                    request.SymbolName,
-                    [],
-                    [],
-                    loaded.Result.Warnings,
-                    loaded.Result.ErrorMessage);
-            }
-
-            var warnings = loaded.Result.Warnings.Concat(loaded.Result.Diagnostics).Distinct().ToList();
-            var matched = await FindMatchingSymbolsAsync(loaded.Projects, request, cancellationToken);
-            if (matched.Count > 1)
-            {
-                warnings.Add("Multiple symbols matched. Results may include references for more than one symbol.");
-            }
-
-            var effectiveMaxTotal = Math.Clamp(request.MaxResults ?? MaxTotalReferences, 1, MaxTotalReferences);
-            var references = new List<RoslynReferenceInfo>();
-            foreach (var match in matched.Take(MaxMatchedSymbols))
-            {
-                references.AddRange(GetDefinitionReferences(match));
-                if (references.Count >= effectiveMaxTotal)
-                    break;
-
-                var found = await SymbolFinder.FindReferencesAsync(match.Symbol, loaded.Solution, cancellationToken);
-                foreach (var referencedSymbol in found)
-                {
-                    foreach (var location in referencedSymbol.Locations
-                        .Where(l => l.Location.IsInSource)
-                        .Take(MaxReferencesPerSymbol))
-                    {
-                        if (references.Count >= effectiveMaxTotal)
-                            break;
-
-                        var reference = ToReference(match, location.Location, "Reference", isDefinition: false);
-                        if (reference is not null)
-                            references.Add(reference);
-                    }
-                }
-            }
-
-            var matchedSymbols = matched
-                .Take(MaxMatchedSymbols)
-                .Select(m => m.Info)
-                .ToList();
-
             return new RoslynReferenceAnalysisResult(
-                true,
+                false,
                 loaded.Result.WorkspacePath,
                 loaded.Result.WorkspaceKind,
                 request.SymbolName,
-                matchedSymbols,
-                references.Take(effectiveMaxTotal).ToList(),
-                warnings,
-                null);
+                [],
+                [],
+                loaded.Result.Warnings,
+                loaded.Result.ErrorMessage);
         }
+
+        var warnings = loaded.Result.Warnings.Concat(loaded.Result.Diagnostics).Distinct().ToList();
+        var matched = await FindMatchingSymbolsAsync(loaded.Projects, request, cancellationToken);
+        if (matched.Count > 1)
+        {
+            warnings.Add("Multiple symbols matched. Results may include references for more than one symbol.");
+        }
+
+        var effectiveMaxTotal = Math.Clamp(request.MaxResults ?? MaxTotalReferences, 1, MaxTotalReferences);
+        var references = new List<RoslynReferenceInfo>();
+        foreach (var match in matched.Take(MaxMatchedSymbols))
+        {
+            references.AddRange(GetDefinitionReferences(match));
+            if (references.Count >= effectiveMaxTotal)
+                break;
+
+            var found = await SymbolFinder.FindReferencesAsync(match.Symbol, loaded.Solution, cancellationToken);
+            foreach (var referencedSymbol in found)
+            {
+                foreach (var location in referencedSymbol.Locations
+                    .Where(l => l.Location.IsInSource)
+                    .Take(MaxReferencesPerSymbol))
+                {
+                    if (references.Count >= effectiveMaxTotal)
+                        break;
+
+                    var reference = ToReference(match, location.Location, "Reference", isDefinition: false);
+                    if (reference is not null)
+                        references.Add(reference);
+                }
+            }
+        }
+
+        var matchedSymbols = matched
+            .Take(MaxMatchedSymbols)
+            .Select(m => m.Info)
+            .ToList();
+
+        return new RoslynReferenceAnalysisResult(
+            true,
+            loaded.Result.WorkspacePath,
+            loaded.Result.WorkspaceKind,
+            request.SymbolName,
+            matchedSymbols,
+            references.Take(effectiveMaxTotal).ToList(),
+            warnings,
+            null);
     }
 
     private static async Task<IReadOnlyList<SymbolMatch>> FindMatchingSymbolsAsync(

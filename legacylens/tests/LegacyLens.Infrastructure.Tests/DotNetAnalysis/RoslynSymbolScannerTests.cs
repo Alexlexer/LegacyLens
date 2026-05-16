@@ -1,4 +1,5 @@
 using LegacyLens.Infrastructure.DotNetAnalysis;
+using Microsoft.Extensions.Options;
 
 namespace LegacyLens.Infrastructure.Tests.DotNetAnalysis;
 
@@ -15,9 +16,7 @@ public sealed class RoslynSymbolScannerTests : IDisposable
     public async Task ScanAsync_ExtractsBasicSymbolsFromTinyProject()
     {
         WriteProject();
-        var scanner = new RoslynSymbolScanner(
-            new DotNetWorkspaceDiscovery(),
-            new RoslynWorkspaceLoader());
+        var scanner = new RoslynSymbolScanner(CreateCache());
 
         var result = await scanner.ScanAsync(_root, CancellationToken.None);
 
@@ -33,6 +32,13 @@ public sealed class RoslynSymbolScannerTests : IDisposable
         Assert.Contains(result.Symbols, s => s.Kind == "method" && s.FullName == "Sample.UserService.GetName");
         Assert.Contains(result.Symbols, s => s.Kind == "property" && s.FullName == "Sample.UserService.Name");
     }
+
+    private static RoslynWorkspaceCache CreateCache()
+        => new(
+            new DotNetWorkspaceDiscovery(),
+            new RoslynWorkspaceLoader(),
+            Options.Create(new RoslynOptions()),
+            TimeProvider.System);
 
     private void WriteProject()
     {

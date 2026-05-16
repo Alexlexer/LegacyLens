@@ -58,6 +58,14 @@ The debug endpoint `POST /api/dotnet/workspace/scan` validates the repository pa
 
 `POST /api/dotnet/references` resolves a requested C# symbol name/full name and returns matched symbols plus source references. Review reports are not yet powered by Roslyn reference data; future work can merge Roslyn references with gpu-search context for more precise impact analysis.
 
+## Audit Provider Pipeline
+
+Legacy .NET Audit Reports are composed by a deterministic provider pipeline in `LegacyLens.Application`. The audit orchestrator builds a shared `AuditContext`, invokes registered `IAuditProvider` implementations in a predictable order, merges provider output, and then persists/formats the report.
+
+Current providers cover repository technology signals, Roslyn workspace/symbol summaries, dependency injection analysis, `gpu-search-mcp` signal scans, architecture signals, and recommended next steps. Providers return data only; they do not mutate report objects directly. If one provider fails, the audit can continue with a warning/finding instead of losing the whole report.
+
+Roslyn provides compiler-aware .NET facts, `gpu-search-mcp` provides broad repository signal retrieval, and the DI provider maps service registration analysis. Optional LLM summarization runs after deterministic provider output and does not change the provider pipeline.
+
 ## Report Persistence
 
 `IReportRepository` is defined in Application. Infrastructure provides a SQLite implementation that stores full review reports as JSON plus indexed summary fields for listing. The review orchestrator saves each generated report.

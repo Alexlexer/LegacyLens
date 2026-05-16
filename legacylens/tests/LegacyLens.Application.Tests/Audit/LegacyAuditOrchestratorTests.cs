@@ -293,6 +293,44 @@ public sealed class LegacyAuditOrchestratorTests : IDisposable
         Assert.Contains("Signal scan", report.Markdown);
     }
 
+    [Fact]
+    public async Task AuditAsync_InvokesProvidersAndMergesResults()
+    {
+        var provider = new TrackingAuditProvider();
+        var orchestrator = new LegacyAuditOrchestrator(
+            new StubWorkspaceDiscovery(),
+            [provider],
+            new NullLlmProvider(),
+            new LegacyAuditMarkdownFormatter());
+
+        var report = await orchestrator.AuditAsync(
+            new LegacyAuditRequest(_root, IncludeRoslyn: false, IncludeGpuSearch: false, IncludeDependencyInjection: false),
+            CancellationToken.None);
+
+        Assert.True(provider.WasCalled);
+        Assert.Contains(report.TechnologySignals, s => s.Name == "Provider tech");
+        Assert.Contains(report.ArchitectureSignals, s => s.Name == "Provider architecture");
+        Assert.Contains(report.RiskFindings, f => f.Code == "provider-risk");
+        Assert.Contains("Review provider output.", report.RecommendedNextSteps);
+    }
+
+    [Fact]
+    public async Task AuditAsync_ProviderFailureAddsFindingAndContinues()
+    {
+        var orchestrator = new LegacyAuditOrchestrator(
+            new StubWorkspaceDiscovery(),
+            [new ThrowingAuditProvider(), new TrackingAuditProvider()],
+            new NullLlmProvider(),
+            new LegacyAuditMarkdownFormatter());
+
+        var report = await orchestrator.AuditAsync(
+            new LegacyAuditRequest(_root, IncludeRoslyn: false, IncludeGpuSearch: false, IncludeDependencyInjection: false),
+            CancellationToken.None);
+
+        Assert.Contains(report.RiskFindings, f => f.Code == "audit-provider-failed");
+        Assert.Contains(report.RiskFindings, f => f.Code == "provider-risk");
+    }
+
     private LegacyAuditOrchestrator CreateOrchestrator(
         IGpuSearchClient gpuSearchClient,
         IReviewLlmProvider llmProvider,
@@ -300,12 +338,41 @@ public sealed class LegacyAuditOrchestratorTests : IDisposable
     {
         return new LegacyAuditOrchestrator(
             new StubWorkspaceDiscovery(),
-            new StubWorkspaceLoader(),
-            new StubSymbolScanner(),
-            diAnalyzer ?? new NullDiAnalyzer(),
-            gpuSearchClient,
+            [
+                new TechnologySignalAuditProvider(),
+                new RoslynAuditProvider(new StubWorkspaceLoader(), new StubSymbolScanner()),
+                new DependencyInjectionAuditProvider(diAnalyzer ?? new NullDiAnalyzer()),
+                new GpuSearchSignalAuditProvider(gpuSearchClient),
+                new ArchitectureSignalAuditProvider(),
+                new RecommendedNextStepsAuditProvider()
+            ],
             llmProvider,
             new LegacyAuditMarkdownFormatter());
+    }
+
+    private sealed class TrackingAuditProvider : IAuditProvider
+    {
+        public string Name => "Tracking";
+        public bool WasCalled { get; private set; }
+
+        public Task<AuditProviderResult> AnalyzeAsync(AuditContext context, CancellationToken cancellationToken)
+        {
+            WasCalled = true;
+            return Task.FromResult(new AuditProviderResult(
+                Name,
+                TechnologySignals: [new TechnologySignal("Provider tech", "Test", "provider", null, "High")],
+                ArchitectureSignals: [new ArchitectureSignal("Provider architecture", "Provider architecture signal.", "provider", "Medium")],
+                RiskFindings: [new AuditFinding("Medium", "provider-risk", "Provider risk", "Provider risk finding.")],
+                RecommendedNextSteps: ["Review provider output."]));
+        }
+    }
+
+    private sealed class ThrowingAuditProvider : IAuditProvider
+    {
+        public string Name => "Throwing";
+
+        public Task<AuditProviderResult> AnalyzeAsync(AuditContext context, CancellationToken cancellationToken)
+            => throw new InvalidOperationException("Provider failed.");
     }
 
     private sealed class StubWorkspaceDiscovery : IDotNetWorkspaceDiscovery

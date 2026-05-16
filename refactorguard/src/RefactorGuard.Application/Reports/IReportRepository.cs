@@ -1,3 +1,4 @@
+using RefactorGuard.Application.Audit;
 using RefactorGuard.Application.Review;
 
 namespace RefactorGuard.Application.Reports;
@@ -11,4 +12,8 @@ public interface IReportRepository
     Task<IReadOnlyList<ReportSummary>> ListAsync(CancellationToken cancellationToken);
 
     Task<bool> DeleteAsync(string reportId, CancellationToken cancellationToken);
+
+    Task SaveAuditAsync(LegacyAuditReport report, CancellationToken cancellationToken);
+
+    Task<LegacyAuditReport?> GetAuditByIdAsync(string reportId, CancellationToken cancellationToken);
 }

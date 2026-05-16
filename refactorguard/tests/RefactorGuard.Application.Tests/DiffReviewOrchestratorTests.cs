@@ -1,3 +1,4 @@
+using RefactorGuard.Application.Audit;
 using RefactorGuard.Application.DotNetAnalysis;
 using RefactorGuard.Application.Git;
 using RefactorGuard.Application.Reports;
@@ -318,6 +319,12 @@ public sealed class DiffReviewOrchestratorTests
 
         public Task<bool> DeleteAsync(string reportId, CancellationToken cancellationToken)
             => Task.FromResult(false);
+
+        public Task SaveAuditAsync(LegacyAuditReport report, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task<LegacyAuditReport?> GetAuditByIdAsync(string reportId, CancellationToken cancellationToken)
+            => Task.FromResult<LegacyAuditReport?>(null);
     }
 
     private sealed class NullGpuSearchClient : IGpuSearchClient

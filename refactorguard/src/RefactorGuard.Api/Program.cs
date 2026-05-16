@@ -32,12 +32,23 @@ app.MapPost("/api/audit/legacy-dotnet", async (
     LegacyAuditRequest request,
     ILegacyAuditOrchestrator auditOrchestrator,
     IRepoPathValidator repoPathValidator,
+    IReportRepository reportRepository,
     CancellationToken cancellationToken) =>
 {
     try
     {
         var repoPath = repoPathValidator.Validate(request.RepoPath ?? string.Empty);
         var report = await auditOrchestrator.AuditAsync(request with { RepoPath = repoPath }, cancellationToken);
+
+        try
+        {
+            await reportRepository.SaveAuditAsync(report, cancellationToken);
+        }
+        catch (Exception)
+        {
+            // Persistence failure does not fail the audit response
+        }
+
         return Results.Ok(report);
     }
     catch (ArgumentException ex)
@@ -224,9 +235,12 @@ app.MapPost("/api/review/diff", async (
 });
 app.MapGet("/api/reports", async (
     IReportRepository reports,
+    string? type,
     CancellationToken cancellationToken) =>
 {
     var result = await reports.ListAsync(cancellationToken);
+    if (!string.IsNullOrEmpty(type))
+        result = result.Where(r => string.Equals(r.ReportType, type, StringComparison.OrdinalIgnoreCase)).ToList();
     return Results.Ok(result);
 });
 app.MapGet("/api/reports/{id}", async (
@@ -244,6 +258,14 @@ app.MapDelete("/api/reports/{id}", async (
 {
     var deleted = await reports.DeleteAsync(id, cancellationToken);
     return deleted ? Results.NoContent() : Results.NotFound();
+});
+app.MapGet("/api/audit/reports/{id}", async (
+    string id,
+    IReportRepository reports,
+    CancellationToken cancellationToken) =>
+{
+    var report = await reports.GetAuditByIdAsync(id, cancellationToken);
+    return report is null ? Results.NotFound() : Results.Ok(report);
 });
 
 app.Run();

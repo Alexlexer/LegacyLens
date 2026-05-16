@@ -50,11 +50,13 @@ When requested, the review workflow can enrich the deterministic report through 
 
 ## Roslyn .NET Analysis Foundation
 
-LegacyLens is beginning a compiler-aware .NET layer backed by Roslyn. The first foundation discovers `.slnx`, `.sln`, and `.csproj` workspaces, loads them through `MSBuildWorkspace` when supported by the local SDK/MSBuild installation, and extracts basic C# symbols: namespaces, types, methods, and properties.
+LegacyLens is beginning a compiler-aware .NET layer backed by Roslyn. The foundation discovers `.slnx`, `.sln`, and `.csproj` workspaces, loads them through `MSBuildWorkspace` when supported by the local SDK/MSBuild installation, and extracts basic C# symbols: namespaces, types, methods, and properties.
 
-`gpu-search-mcp` remains the fast retrieval layer for heuristic search, related code, and dependency impact. Roslyn will provide precise compiler-aware facts in later milestones. Dependency impact remains heuristic until Roslyn reference analysis is added.
+Roslyn also provides C# symbol reference analysis through `SymbolFinder.FindReferencesAsync`. This is compiler-aware and .NET-specific, while `gpu-search-mcp` remains the fast broad retrieval layer for heuristic search, related code, and dependency impact.
 
 The debug endpoint `POST /api/dotnet/workspace/scan` validates the repository path, reports the selected workspace candidate, and returns workspace counts plus the first 50 symbols. This endpoint is read-only and does not modify or restore project files explicitly.
+
+`POST /api/dotnet/references` resolves a requested C# symbol name/full name and returns matched symbols plus source references. Review reports are not yet powered by Roslyn reference data; future work can merge Roslyn references with gpu-search context for more precise impact analysis.
 
 ## Report Persistence
 

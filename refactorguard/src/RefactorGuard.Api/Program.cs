@@ -83,6 +83,37 @@ app.MapPost("/api/dotnet/workspace/scan", async (
             ex.Message));
     }
 });
+app.MapPost("/api/dotnet/references", async (
+    RoslynReferenceAnalysisRequest request,
+    IRepoPathValidator repoPathValidator,
+    IRoslynReferenceAnalyzer referenceAnalyzer,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var repoPath = repoPathValidator.Validate(request.RepoPath ?? string.Empty);
+        var response = await referenceAnalyzer.FindReferencesAsync(
+            request with { RepoPath = repoPath },
+            cancellationToken);
+        return Results.Ok(response);
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new ProblemDetailsResponse(
+            "https://refactorguard.local/errors/invalid-dotnet-reference-request",
+            "Invalid .NET reference analysis request",
+            StatusCodes.Status400BadRequest,
+            ex.Message));
+    }
+    catch (UnauthorizedAccessException ex)
+    {
+        return Results.BadRequest(new ProblemDetailsResponse(
+            "https://refactorguard.local/errors/invalid-repo-path",
+            "Invalid repository path",
+            StatusCodes.Status400BadRequest,
+            ex.Message));
+    }
+});
 app.MapPost("/api/review/diff/preview", async (
     GitDiffPreviewRequest request,
     IGitDiffService gitDiffService,

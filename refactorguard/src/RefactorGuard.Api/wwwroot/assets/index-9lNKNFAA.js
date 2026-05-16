@@ -4,7 +4,7 @@
       <div>
         <p class="eyebrow">Local legacy .NET review</p>
         <h1>LegacyLens</h1>
-        <p class="muted">Flat, local-first review workflow powered by Git diffs, gpu-search-mcp, and optional LM Studio summaries.</p>
+        <p class="muted">Flat, local-first review workflow powered by Git diffs, gpu-search-mcp, and optional local LLM summaries.</p>
       </div>
       <button id="statusButton" class="ghost">Check gpu-search</button>
     </section>
@@ -13,7 +13,7 @@
       <div class="panel stack">
         <label for="repoPath">Repository path</label>
         <input id="repoPath" placeholder="D:\\\\Projects\\\\ExampleRepo" />
-        <label class="check"><input id="useLlm" type="checkbox" /> Include LM Studio summary</label>
+        <label class="check"><input id="useLlm" type="checkbox" /> Include local LLM summary</label>
         <div class="actions">
           <button id="previewButton">Preview diff</button>
           <button id="reviewButton">Run review</button>

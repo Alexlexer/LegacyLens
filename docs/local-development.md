@@ -98,9 +98,9 @@ The `RefactorGuard` config section is also accepted for backward compatibility.
 
 Use `POST /api/review/diff/preview` with a JSON body such as `{ "repoPath": "D:\\Projects\\ExampleRepo" }`.
 
-Use `POST /api/review/diff` with the same body to generate an enriched Markdown review report. Append `"useLlm": true` to also include an LM Studio summary.
+Use `POST /api/review/diff` with the same body to generate an enriched Markdown review report. Append `"useLlm": true` to also include a local LLM summary.
 
-To include an LM Studio summary, start LM Studio's local OpenAI-compatible server and send:
+To include an LM Studio or Ollama summary, configure the provider, start the local LLM server, and send:
 
 ```json
 {
@@ -170,3 +170,29 @@ LM Studio is optional. Deterministic review remains the safe default unless `use
   }
 }
 ```
+
+## Ollama provider
+
+Ollama is optional. Deterministic review remains the safe default unless `useLlm` is true and the provider is configured for Ollama.
+
+```bash
+ollama pull qwen2.5-coder:7b
+ollama serve
+```
+
+```json
+{
+  "LegacyLens": {
+    "Review": {
+      "Provider": "Ollama"
+    },
+    "Ollama": {
+      "BaseUrl": "http://127.0.0.1:11434",
+      "Model": "qwen2.5-coder:7b",
+      "TimeoutSeconds": 120
+    }
+  }
+}
+```
+
+`useLlm=true` is still required for an LLM summary. Prompts may contain code snippets and diffs, so use a trusted local/private Ollama instance. Ollama works well with an RTX GPU when configured to use it.

@@ -12,7 +12,7 @@ This guide covers running LegacyLens together with `gpu-search-mcp` on a local m
 | `gpu-search-mcp` | Install and confirm it is on PATH or note its full path |
 | A Git repository with at least one committed change | Used as the analysis target |
 
-Optional: LM Studio running locally for LLM-enhanced summaries.
+Optional: LM Studio or Ollama running locally for LLM-enhanced summaries.
 
 ---
 
@@ -125,7 +125,7 @@ Click **Run review**. LegacyLens generates a Markdown report with:
 
 The report is saved to SQLite and appears in the **Saved reports** panel.
 
-To include an LM Studio summary, tick **Include LM Studio summary** before clicking **Run review**.
+To include a local LLM summary, configure LM Studio or Ollama as the review provider, then tick **Include local LLM summary** before clicking **Run review**. The checkbox enables `useLlm=true`; deterministic review remains the default when it is unchecked.
 
 The report viewer is structured for demos:
 
@@ -135,7 +135,7 @@ The report viewer is structured for demos:
 - **LLM Summary** appears when LM Studio returns a summary.
 - **Raw Markdown** remains available in a collapsible block.
 
-Use the copy buttons to copy the full Markdown report, gpu-search context, or LM Studio summary.
+Use the copy buttons to copy the full Markdown report, gpu-search context, or LLM summary.
 
 ### .NET analysis
 
@@ -214,6 +214,34 @@ gpu-search-mcp builds its index on first start. The `/stats` endpoint shows `ind
 ### LM Studio unavailable
 
 The review falls back to the deterministic provider. Check that LM Studio's local server is running on the configured `LmStudio:BaseUrl`. The default is `http://127.0.0.1:1234/v1/`.
+
+### Ollama provider
+
+Ollama is optional and local-first. Pull a model and start Ollama:
+
+```bash
+ollama pull qwen2.5-coder:7b
+ollama serve
+```
+
+Configure LegacyLens:
+
+```json
+{
+  "LegacyLens": {
+    "Review": {
+      "Provider": "Ollama"
+    },
+    "Ollama": {
+      "BaseUrl": "http://127.0.0.1:11434",
+      "Model": "qwen2.5-coder:7b",
+      "TimeoutSeconds": 120
+    }
+  }
+}
+```
+
+`useLlm=true` is still required. Prompts may contain diffs and code snippets, so use a trusted local/private Ollama instance. Ollama works well with an RTX GPU when configured to use it.
 
 ### SQLite database path
 

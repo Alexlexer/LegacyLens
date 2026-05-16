@@ -44,6 +44,11 @@ public static class DependencyInjection
             .ValidateDataAnnotations()
             .Validate(options => options.BaseUrl.IsAbsoluteUri, "LM Studio BaseUrl must be absolute.")
             .ValidateOnStart();
+        services.AddOptions<OllamaOptions>()
+            .Bind(Prefer(configuration, "LegacyLens:Ollama", OllamaOptions.SectionName))
+            .ValidateDataAnnotations()
+            .Validate(options => options.BaseUrl.IsAbsoluteUri, "Ollama BaseUrl must be absolute.")
+            .ValidateOnStart();
         services.AddKeyedSingleton<IReviewLlmProvider, DeterministicReviewLlmProvider>("deterministic");
         services.AddHttpClient<LmStudioReviewLlmProvider>((serviceProvider, client) =>
         {
@@ -55,6 +60,16 @@ public static class DependencyInjection
         });
         services.AddKeyedScoped<IReviewLlmProvider>("lmstudio", (serviceProvider, _) =>
             serviceProvider.GetRequiredService<LmStudioReviewLlmProvider>());
+        services.AddHttpClient<OllamaReviewLlmProvider>((serviceProvider, client) =>
+        {
+            var options = serviceProvider
+                .GetRequiredService<Microsoft.Extensions.Options.IOptions<OllamaOptions>>()
+                .Value;
+            client.BaseAddress = options.BaseUrl;
+            client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
+        });
+        services.AddKeyedScoped<IReviewLlmProvider>("ollama", (serviceProvider, _) =>
+            serviceProvider.GetRequiredService<OllamaReviewLlmProvider>());
         services.AddScoped<IReviewLlmProvider, ReviewLlmProviderFactory>();
         services.AddOptions<PersistenceOptions>()
             .Bind(Prefer(configuration, "LegacyLens:Persistence", PersistenceOptions.SectionName))

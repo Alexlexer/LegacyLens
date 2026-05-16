@@ -98,6 +98,39 @@ type GpuSearchContext = {
   limitations?: string[] | null;
 };
 
+type ChangedSymbolSummary = {
+  name?: string;
+  fullName?: string;
+  kind?: string;
+  filePath?: string;
+  line?: number;
+  column?: number;
+  projectName?: string;
+};
+
+type RoslynReferenceSummary = {
+  symbolName?: string;
+  symbolFullName?: string;
+  symbolKind?: string;
+  filePath?: string;
+  line?: number;
+  column?: number;
+  projectName?: string;
+  containingSymbol?: string | null;
+  referenceKind?: string;
+  isDefinition?: boolean;
+};
+
+type RoslynReviewContext = {
+  success?: boolean;
+  workspacePath?: string | null;
+  workspaceKind?: string | null;
+  changedSymbols?: ChangedSymbolSummary[] | null;
+  symbolReferences?: RoslynReferenceSummary[] | null;
+  warnings?: string[] | null;
+  errorMessage?: string | null;
+};
+
 type ReviewReport = {
   id?: string;
   reportId?: string;
@@ -115,6 +148,7 @@ type ReviewReport = {
   reviewMode?: string | null;
   analysisMode?: string | null;
   gpuSearchContext?: GpuSearchContext | null;
+  roslynContext?: RoslynReviewContext | null;
 };
 
 type ReportSummary = {
@@ -302,6 +336,7 @@ function renderReport(report: ReviewReport): void {
   copyPayloads.clear();
   const markdown = report.markdown ?? '';
   const context = report.gpuSearchContext ?? null;
+  const roslynCtx = report.roslynContext ?? null;
   const llmSummary = report.llmSummary ?? '';
 
   registerCopy('markdown', markdown);
@@ -328,6 +363,7 @@ function renderReport(report: ReviewReport): void {
       ${renderSummary(report)}
       ${renderFindings(report.findings ?? [])}
       ${renderGpuSearchContext(context)}
+      ${renderRoslynContext(roslynCtx)}
       ${llmSummary ? renderSection('LLM Summary', `<div class="llm-summary">${escapeHtml(llmSummary)}</div>`) : ''}
       ${renderRawMarkdown(markdown)}
     </article>
@@ -459,6 +495,67 @@ function renderRelatedResults(results: RelatedCodeResult[]): string {
         .join('')}
     </div>
   `;
+}
+
+function renderRoslynContext(context: RoslynReviewContext | null): string {
+  if (!context) {
+    return '';
+  }
+
+  if (!context.success || (!context.changedSymbols?.length && context.errorMessage)) {
+    return renderSection(
+      'Roslyn Reference Context',
+      `<p class="error">Roslyn reference analysis was unavailable. Review continued with deterministic and gpu-search context.</p>
+       ${context.errorMessage ? `<p class="muted">${escapeHtml(context.errorMessage)}</p>` : ''}`,
+    );
+  }
+
+  const symbols = context.changedSymbols ?? [];
+  if (symbols.length === 0) {
+    return renderSection('Roslyn Reference Context', '<p class="empty">No changed C# symbols were matched.</p>');
+  }
+
+  const allRefs = context.symbolReferences ?? [];
+  const symbolCards = symbols
+    .map((symbol) => {
+      const refs = allRefs.filter(
+        (r) => r.symbolName === symbol.name && r.symbolFullName === symbol.fullName && !r.isDefinition,
+      );
+      const refRows = refs
+        .slice(0, 10)
+        .map((r) => {
+          const container = r.containingSymbol ? ` <span class="muted">— in ${escapeHtml(r.containingSymbol)}</span>` : '';
+          return `<li class="mono">${escapeHtml(r.filePath ?? '')}:${r.line ?? '?'}${container}</li>`;
+        })
+        .join('');
+
+      return `
+        <article class="context-card">
+          <div class="row">
+            <h3 class="mono">${escapeHtml(symbol.name ?? 'Unknown')}</h3>
+            <span class="badge">${escapeHtml(symbol.kind ?? 'symbol')}</span>
+          </div>
+          <div class="meta-grid">
+            ${meta('Project', symbol.projectName)}
+            ${meta('Definition', symbol.filePath ? `${symbol.filePath}:${symbol.line ?? '?'}` : undefined)}
+            ${meta('References', String(refs.length))}
+          </div>
+          ${refs.length ? `<div class="mini-block"><h4>References</h4><ul>${refRows}</ul></div>` : ''}
+        </article>
+      `;
+    })
+    .join('');
+
+  const warnings = context.warnings?.length ? detailsList('Warnings', context.warnings) : '';
+  const workspaceInfo =
+    context.workspacePath
+      ? `<p class="muted mono">${escapeHtml(context.workspacePath)}${context.workspaceKind ? ` (${escapeHtml(context.workspaceKind)})` : ''}</p>`
+      : '';
+
+  return renderSection(
+    'Roslyn Reference Context',
+    `${workspaceInfo}${warnings}<div class="context-list">${symbolCards}</div>`,
+  );
 }
 
 function renderRawMarkdown(markdown: string): string {

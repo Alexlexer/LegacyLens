@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
+using RefactorGuard.Application.DotNetAnalysis;
 using RefactorGuard.Application.Review;
 using RefactorGuard.Infrastructure.Llm;
 
@@ -78,6 +79,47 @@ public sealed class LmStudioReviewLlmProviderTests
             CancellationToken.None);
 
         Assert.Contains("references type UserService (heuristic)", requestBody ?? string.Empty);
+    }
+
+    [Fact]
+    public async Task GenerateReviewAsync_IncludesRoslynContextInPrompt()
+    {
+        string? requestBody = null;
+        var provider = new LmStudioReviewLlmProvider(
+            CreateClient(
+                new
+                {
+                    choices = new[]
+                    {
+                        new { message = new { role = "assistant", content = "Review summary" } }
+                    }
+                },
+                inspectRequest: body => requestBody = body),
+            Options.Create(new LmStudioOptions { Model = "local-model" }));
+        var roslynContext = new RoslynReviewContext(
+            true,
+            "/workspace/App.sln",
+            DotNetWorkspaceKind.Sln,
+            [new ChangedSymbolSummary("UserService", "SampleApp.UserService", "class", "src/UserService.cs", 5, 1, "SampleApp")],
+            [
+                new RoslynReferenceSummary(
+                    "UserService", "SampleApp.UserService", "class",
+                    "src/AuthController.cs", 28, 5, "SampleApp",
+                    "SampleApp.AuthController.Register",
+                    "Reference", false)
+            ],
+            [],
+            null);
+
+        await provider.GenerateReviewAsync(
+            new LlmReviewPrompt("repo", [], "diff", RoslynContext: roslynContext),
+            CancellationToken.None);
+
+        Assert.NotNull(requestBody);
+        Assert.Contains("Roslyn reference context", requestBody);
+        Assert.Contains("compiler-verified", requestBody);
+        Assert.Contains("UserService", requestBody);
+        Assert.Contains("src/AuthController.cs", requestBody);
     }
 
     private static HttpClient CreateClient(

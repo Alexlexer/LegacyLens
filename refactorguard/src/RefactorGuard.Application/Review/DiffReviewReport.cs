@@ -12,4 +12,5 @@ public sealed record DiffReviewReport(
     string Markdown,
     string? LlmSummary = null,
     string LlmProvider = "Deterministic",
-    GpuSearchReviewContext? GpuSearchContext = null);
+    GpuSearchReviewContext? GpuSearchContext = null,
+    RoslynReviewContext? RoslynContext = null);

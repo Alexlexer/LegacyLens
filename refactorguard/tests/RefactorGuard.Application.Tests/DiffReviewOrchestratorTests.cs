@@ -1,3 +1,4 @@
+using RefactorGuard.Application.DotNetAnalysis;
 using RefactorGuard.Application.Git;
 using RefactorGuard.Application.Reports;
 using RefactorGuard.Application.Review;
@@ -183,11 +184,94 @@ public sealed class DiffReviewOrchestratorTests
         Assert.Equal(3, gpuSearchClient.LastSearchHybridLimit);
     }
 
+    [Fact]
+    public async Task ReviewDiffAsync_IncludesRoslynContext_WhenCsFilesChanged()
+    {
+        var diff = new GitDiffPreviewResponse(
+            "repo",
+            1,
+            [new GitDiffFile("src/UserService.cs", "M", 10, 2)],
+            "diff");
+        var orchestrator = CreateOrchestrator(
+            diff,
+            new NullGpuSearchClient(),
+            roslynReferenceAnalyzer: new SucceedingRoslynReferenceAnalyzer());
+
+        var report = await orchestrator.ReviewDiffAsync(new DiffReviewRequest("repo"), CancellationToken.None);
+
+        Assert.NotNull(report.RoslynContext);
+        Assert.True(report.RoslynContext!.Success);
+        Assert.Single(report.RoslynContext.ChangedSymbols);
+        Assert.Equal("UserService", report.RoslynContext.ChangedSymbols[0].Name);
+        Assert.Contains("Roslyn Reference Context", report.Markdown);
+    }
+
+    [Fact]
+    public async Task ReviewDiffAsync_SkipsRoslynEnrichment_WhenNoCsFilesChanged()
+    {
+        var diff = new GitDiffPreviewResponse(
+            "repo",
+            1,
+            [new GitDiffFile("appsettings.json", "M", 2, 1)],
+            "diff");
+        var orchestrator = CreateOrchestrator(diff, new NullGpuSearchClient());
+
+        var report = await orchestrator.ReviewDiffAsync(new DiffReviewRequest("repo"), CancellationToken.None);
+
+        Assert.Null(report.RoslynContext);
+        Assert.DoesNotContain("Roslyn Reference Context", report.Markdown);
+    }
+
+    [Fact]
+    public async Task ReviewDiffAsync_AddsRoslynUnavailableFinding_WhenRoslynFails()
+    {
+        var diff = new GitDiffPreviewResponse(
+            "repo",
+            1,
+            [new GitDiffFile("src/App.cs", "M", 5, 1)],
+            "diff");
+        var orchestrator = CreateOrchestrator(
+            diff,
+            new NullGpuSearchClient(),
+            roslynReferenceAnalyzer: new NullRoslynReferenceAnalyzer());
+
+        var report = await orchestrator.ReviewDiffAsync(new DiffReviewRequest("repo"), CancellationToken.None);
+
+        Assert.Contains(report.Findings, f => f.RuleId == "roslyn-unavailable");
+        Assert.NotNull(report.RoslynContext);
+        Assert.False(report.RoslynContext!.Success);
+    }
+
+    [Fact]
+    public async Task ReviewDiffAsync_RespectsMaxSymbolsForReferenceAnalysis()
+    {
+        var diff = new GitDiffPreviewResponse(
+            "repo",
+            3,
+            [
+                new GitDiffFile("src/One.cs", "M", 1, 0),
+                new GitDiffFile("src/Two.cs", "M", 1, 0),
+                new GitDiffFile("src/Three.cs", "M", 1, 0)
+            ],
+            "diff");
+        var analyzer = new CountingRoslynReferenceAnalyzer();
+        var orchestrator = CreateOrchestrator(
+            diff,
+            new NullGpuSearchClient(),
+            enrichmentOptions: new ReviewEnrichmentOptions { MaxSymbolsForReferenceAnalysis = 2 },
+            roslynReferenceAnalyzer: analyzer);
+
+        await orchestrator.ReviewDiffAsync(new DiffReviewRequest("repo"), CancellationToken.None);
+
+        Assert.Equal(2, analyzer.CallCount);
+    }
+
     private static DiffReviewOrchestrator CreateOrchestrator(
         GitDiffPreviewResponse diff,
         IGpuSearchClient gpuSearchClient,
         IReportRepository? repository = null,
-        ReviewEnrichmentOptions? enrichmentOptions = null)
+        ReviewEnrichmentOptions? enrichmentOptions = null,
+        IRoslynReferenceAnalyzer? roslynReferenceAnalyzer = null)
     {
         return new DiffReviewOrchestrator(
             new StubGitDiffService(diff),
@@ -196,7 +280,8 @@ public sealed class DiffReviewOrchestratorTests
             new ReviewPromptBuilder(),
             new StubReviewLlmProvider(),
             repository ?? new StubReportRepository(),
-            enrichmentOptions ?? new ReviewEnrichmentOptions());
+            enrichmentOptions ?? new ReviewEnrichmentOptions(),
+            roslynReferenceAnalyzer ?? new NullRoslynReferenceAnalyzer());
     }
 
     private sealed class StubGitDiffService(GitDiffPreviewResponse response) : IGitDiffService
@@ -322,6 +407,66 @@ public sealed class DiffReviewOrchestratorTests
 
         public Task<DependencyImpactResponse> GetDependencyImpactAsync(DependencyImpactRequest request, CancellationToken cancellationToken)
             => Task.FromResult(new DependencyImpactResponse("ok", request.Path, null, impactedFiles ?? []));
+    }
+
+    private sealed class NullRoslynReferenceAnalyzer : IRoslynReferenceAnalyzer
+    {
+        public Task<RoslynReferenceAnalysisResult> FindReferencesAsync(
+            RoslynReferenceAnalysisRequest request,
+            CancellationToken cancellationToken)
+            => Task.FromResult(new RoslynReferenceAnalysisResult(
+                false, null, null, request.SymbolName, [], [], [], "Roslyn unavailable in tests."));
+    }
+
+    private sealed class SucceedingRoslynReferenceAnalyzer : IRoslynReferenceAnalyzer
+    {
+        public Task<RoslynReferenceAnalysisResult> FindReferencesAsync(
+            RoslynReferenceAnalysisRequest request,
+            CancellationToken cancellationToken)
+        {
+            var matchedSymbol = new RoslynMatchedSymbol(
+                request.SymbolName,
+                $"SampleApp.{request.SymbolName}",
+                "class",
+                $"src/{request.SymbolName}.cs",
+                1,
+                1,
+                "SampleApp");
+            var reference = new RoslynReferenceInfo(
+                request.SymbolName,
+                $"SampleApp.{request.SymbolName}",
+                "class",
+                "src/OtherService.cs",
+                10,
+                5,
+                "SampleApp",
+                "SampleApp.OtherService",
+                "Reference",
+                false);
+            return Task.FromResult(new RoslynReferenceAnalysisResult(
+                true,
+                "/workspace/SampleApp.sln",
+                DotNetWorkspaceKind.Sln,
+                request.SymbolName,
+                [matchedSymbol],
+                [reference],
+                [],
+                null));
+        }
+    }
+
+    private sealed class CountingRoslynReferenceAnalyzer : IRoslynReferenceAnalyzer
+    {
+        public int CallCount { get; private set; }
+
+        public Task<RoslynReferenceAnalysisResult> FindReferencesAsync(
+            RoslynReferenceAnalysisRequest request,
+            CancellationToken cancellationToken)
+        {
+            CallCount++;
+            return Task.FromResult(new RoslynReferenceAnalysisResult(
+                false, null, null, request.SymbolName, [], [], [], "workspace not available"));
+        }
     }
 
     private sealed class PartiallyFailingGpuSearchClient : IGpuSearchClient

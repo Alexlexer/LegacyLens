@@ -7,5 +7,6 @@ public interface IReviewPromptBuilder
     LlmReviewPrompt Build(
         GitDiffPreviewResponse diff,
         IReadOnlyList<ReviewFinding> findings,
-        GpuSearchReviewContext? gpuSearchContext = null);
+        GpuSearchReviewContext? gpuSearchContext = null,
+        RoslynReviewContext? roslynContext = null);
 }

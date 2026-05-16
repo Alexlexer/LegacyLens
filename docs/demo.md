@@ -23,10 +23,10 @@ LegacyLens rejects repository paths that are not under a configured allowed root
 Copy the example config and edit it:
 
 ```bash
-cp refactorguard/appsettings.Local.example.json refactorguard/appsettings.Local.json
+cp LegacyLens/appsettings.Local.example.json LegacyLens/appsettings.Local.json
 ```
 
-Edit `refactorguard/appsettings.Local.json`:
+Edit `LegacyLens/appsettings.Local.json`:
 
 ```json
 {
@@ -67,8 +67,8 @@ GET http://127.0.0.1:8765/health
 ## Step 3 — Start LegacyLens (Terminal 2)
 
 ```bash
-cd refactorguard
-dotnet run --project src/RefactorGuard.Api
+cd LegacyLens
+dotnet run --project src/LegacyLens.Api
 ```
 
 Wait until you see:
@@ -179,7 +179,7 @@ The **Saved reports** panel lists all generated reports. Click **View** to reloa
 
 ## Step 7 — Find saved reports
 
-Reports are stored in SQLite at the path configured in `Persistence:DatabasePath` (default: `data/legacylens.db` relative to the API working directory, i.e. `refactorguard/data/legacylens.db`).
+Reports are stored in SQLite at the path configured in `Persistence:DatabasePath` (default: `data/legacylens.db` relative to the API working directory, i.e. `LegacyLens/data/legacylens.db`).
 
 The `data/` directory and `*.db` files are git-ignored.
 
@@ -310,7 +310,7 @@ The script is idempotent — repeated runs reset the fixture to a known state an
 
 ### Step 2 — Configure allowed roots
 
-Ensure `test-fixtures` (or its parent) is in `AllowedRoots` in `refactorguard/appsettings.Local.json`:
+Ensure `test-fixtures` (or its parent) is in `AllowedRoots` in `LegacyLens/appsettings.Local.json`:
 
 ```json
 {
@@ -331,8 +331,8 @@ gpu-search-mcp --directory ./test-fixtures/sample-dotnet-repo --http --port 8765
 ### Step 4 — Start LegacyLens (Terminal 2)
 
 ```bash
-cd refactorguard
-dotnet run --project src/RefactorGuard.Api
+cd LegacyLens
+dotnet run --project src/LegacyLens.Api
 ```
 
 ### Step 5 — Run the integration smoke script (Terminal 3)

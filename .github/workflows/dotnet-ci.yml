@@ -24,28 +24,28 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: refactorguard/ui/package-lock.json
+          cache-dependency-path: LegacyLens/ui/package-lock.json
 
       - name: Install frontend dependencies
-        working-directory: refactorguard/ui
+        working-directory: LegacyLens/ui
         run: npm ci
 
       - name: Build frontend
-        working-directory: refactorguard/ui
+        working-directory: LegacyLens/ui
         run: npm run build
 
       - name: Restore
-        working-directory: refactorguard
+        working-directory: LegacyLens
         run: dotnet restore
 
       - name: Build
-        working-directory: refactorguard
+        working-directory: LegacyLens
         run: dotnet build --configuration Release --no-restore
 
       - name: Test
-        working-directory: refactorguard
+        working-directory: LegacyLens
         run: dotnet test --configuration Release --no-build
 
       - name: Format
-        working-directory: refactorguard
+        working-directory: LegacyLens
         run: dotnet format --verify-no-changes

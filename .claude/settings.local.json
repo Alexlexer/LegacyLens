@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"D:\\\\Projects\\\\LegacyLens\\\\LegacyLens\" -Recurse -Filter \"*.cs\")",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Sort-Object)",
+      "Bash(git checkout *)",
+      "Bash(dotnet build *)",
+      "Bash(bash -n D:/Projects/LegacyLens/scripts/start-demo.sh)",
+      "Bash(bash -n D:/Projects/LegacyLens/scripts/prepare-sample-diff.sh)",
+      "Bash(bash -n D:/Projects/LegacyLens/scripts/integration-smoke.sh)",
+      "PowerShell(dotnet format *)",
+      "PowerShell(git *)",
+      "Bash(git branch *)",
+      "Bash(grep -v \"\\\\.cs$\\\\|\\\\.csproj$\")",
+      "Bash(grep \"\\\\.cs$\")",
+      "Bash(dotnet test *)",
+      "Bash(npm ci *)",
+      "Bash(npm run *)",
+      "Bash(dotnet format *)",
+      "Bash(dotnet restore *)",
+      "Bash(echo \"exit:$?\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(gh pr create --title 'feat\\(audit\\): add legacy dotnet audit report' --body ' *)",
+      "Bash(git push *)",
+      "Bash(gh pr *)",
+      "Bash(gh api *)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('default_branch:', d['default_branch'], '\\\\nallow_auto_merge:', d.get\\('allow_auto_merge'\\), '\\\\ndelete_branch_on_merge:', d.get\\('delete_branch_on_merge'\\)\\)\")",
+      "Bash(git pull *)",
+      "Bash(Get-ChildItem -Path \"D:\\\\Projects\\\\LegacyLens\\\\LegacyLens\\\\src\\\\LegacyLens.Application\\\\Reports\" -File -ErrorAction SilentlyContinue)",
+      "Bash(Get-ChildItem -Path \"D:\\\\Projects\\\\LegacyLens\" -Recurse -Filter \"*.sln*\" -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-ChildItem -Path \"D:\\\\Projects\\\\LegacyLens\" -Recurse -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match \"LegacyLens\" -or $_.Name -match \"legacylens\" } | Select-Object -ExpandProperty FullName | Sort-Object)",
+      "Bash(xargs head -20)",
+      "Bash(git mv *)"
+    ]
+  }
+}

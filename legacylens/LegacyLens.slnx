@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/LegacyLens.Api/LegacyLens.Api.csproj" />
+    <Project Path="src/LegacyLens.Application/LegacyLens.Application.csproj" />
+    <Project Path="src/LegacyLens.Domain/LegacyLens.Domain.csproj" />
+    <Project Path="src/LegacyLens.Infrastructure/LegacyLens.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/LegacyLens.Api.Tests/LegacyLens.Api.Tests.csproj" />
+    <Project Path="tests/LegacyLens.Application.Tests/LegacyLens.Application.Tests.csproj" />
+    <Project Path="tests/LegacyLens.Infrastructure.Tests/LegacyLens.Infrastructure.Tests.csproj" />
+  </Folder>
+</Solution>

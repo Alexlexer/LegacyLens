@@ -54,7 +54,7 @@ $legacyLensUrl   = "http://127.0.0.1:$LegacyLensPort"
 $legacyLensHealth = "$legacyLensUrl/health"
 $statusUrl       = "$legacyLensUrl/api/search/status"
 $scriptDir       = Split-Path -Parent $PSScriptRoot
-$refactorguardDir = Join-Path $scriptDir "refactorguard"
+$LegacyLensDir = Join-Path $scriptDir "LegacyLens"
 
 Write-Host ""
 Write-Host "=========================================" -ForegroundColor Cyan
@@ -79,8 +79,8 @@ Write-Host "-----------------------------------------" -ForegroundColor Yellow
 Write-Host " TERMINAL 2 — Start LegacyLens API" -ForegroundColor Yellow
 Write-Host "-----------------------------------------" -ForegroundColor Yellow
 Write-Host ""
-Write-Host "  cd `"$refactorguardDir`"" -ForegroundColor White
-Write-Host "  dotnet run --project src/RefactorGuard.Api --urls `"http://127.0.0.1:$LegacyLensPort`"" -ForegroundColor White
+Write-Host "  cd `"$LegacyLensDir`"" -ForegroundColor White
+Write-Host "  dotnet run --project src/LegacyLens.Api --urls `"http://127.0.0.1:$LegacyLensPort`"" -ForegroundColor White
 Write-Host ""
 Write-Host "  Wait until you see: Now listening on: http://127.0.0.1:$LegacyLensPort" -ForegroundColor DarkGray
 Write-Host ""

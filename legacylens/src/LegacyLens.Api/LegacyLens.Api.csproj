@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\LegacyLens.Application\LegacyLens.Application.csproj" />
+    <ProjectReference Include="..\LegacyLens.Domain\LegacyLens.Domain.csproj" />
+    <ProjectReference Include="..\LegacyLens.Infrastructure\LegacyLens.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+</Project>

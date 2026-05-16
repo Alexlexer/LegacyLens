@@ -28,14 +28,14 @@ dotnet test
 dotnet format --verify-no-changes
 ```
 
-Build the frontend from `refactorguard/ui`:
+Build the frontend from `LegacyLens/ui`:
 
 ```bash
 npm install
 npm run build
 ```
 
-The Vite build outputs static files to `src/RefactorGuard.Api/wwwroot`, which the API serves at `/`.
+The Vite build outputs static files to `src/LegacyLens.Api/wwwroot`, which the API serves at `/`.
 
 If Python `gpu-search-mcp` is changed, also run available Python checks:
 
@@ -90,7 +90,7 @@ gpu-search-mcp --directory D:\Projects\ExampleRepo --http --port 8765
 Terminal 2 — start LegacyLens:
 
 ```text
-dotnet run --project src/RefactorGuard.Api
+dotnet run --project src/LegacyLens.Api
 ```
 
 Then call:
@@ -186,7 +186,7 @@ Use `GET /api/reports`, `GET /api/reports/{id}`, and `DELETE /api/reports/{id}` 
 
 ## Frontend UI
 
-The minimal UI provides repository path input, diff preview, deterministic or LM Studio review, .NET preset analysis, gpu-search status, and saved report management. During UI-only development, run Vite from `refactorguard/ui`:
+The minimal UI provides repository path input, diff preview, deterministic or LM Studio review, .NET preset analysis, gpu-search status, and saved report management. During UI-only development, run Vite from `LegacyLens/ui`:
 
 ```bash
 npm run dev

@@ -4,7 +4,7 @@ LegacyLens is a local AI-assisted review and legacy .NET analysis tool powered b
 
 ## Naming note
 
-LegacyLens is the product and repository name. Some internal .NET projects and namespaces still use the `RefactorGuard` prefix from the original bootstrap (`RefactorGuard.Api`, `RefactorGuard.Application`, etc.). These are implementation details and may be renamed in a later refactor.
+LegacyLens is the product and repository name. Internal .NET projects and namespaces use the `LegacyLens` prefix throughout (`LegacyLens.Api`, `LegacyLens.Application`, etc.).
 
 ## Current Status
 
@@ -13,16 +13,16 @@ The repository includes the full .NET solution, layered projects, test projects,
 ## Structure
 
 ```text
-refactorguard/
+LegacyLens/
   src/
-    RefactorGuard.Api/
-    RefactorGuard.Application/
-    RefactorGuard.Domain/
-    RefactorGuard.Infrastructure/
+    LegacyLens.Api/
+    LegacyLens.Application/
+    LegacyLens.Domain/
+    LegacyLens.Infrastructure/
   tests/
-    RefactorGuard.Application.Tests/
-    RefactorGuard.Infrastructure.Tests/
-    RefactorGuard.Api.Tests/
+    LegacyLens.Application.Tests/
+    LegacyLens.Infrastructure.Tests/
+    LegacyLens.Api.Tests/
 ```
 
 ## Demo workflow
@@ -43,7 +43,7 @@ Quick start:
 
 ## Development
 
-Run from `refactorguard/`:
+Run from `LegacyLens/`:
 
 ```bash
 dotnet restore
@@ -55,7 +55,7 @@ dotnet format --verify-no-changes
 Run the API locally:
 
 ```bash
-dotnet run --project src/RefactorGuard.Api
+dotnet run --project src/LegacyLens.Api
 ```
 
 Build the minimalist Vite UI before serving it from the API:
@@ -65,7 +65,7 @@ cd ui
 npm install
 npm run build
 cd ..
-dotnet run --project src/RefactorGuard.Api
+dotnet run --project src/LegacyLens.Api
 ```
 
 Open the UI at the API root URL shown by `dotnet run`. Health check:
@@ -132,7 +132,7 @@ gpu-search-mcp --directory D:\Projects\SomeRepo --http --port 8765
 Terminal 2 — start LegacyLens:
 
 ```text
-dotnet run --project src/RefactorGuard.Api
+dotnet run --project src/LegacyLens.Api
 ```
 
 Generated review reports are saved to SQLite. Manage saved reports:

@@ -388,3 +388,64 @@ If gpu-search-mcp is not running, the `[PASS]` for the gpu-search context check 
 ```
 
 The overall smoke test still passes in that case — the review degrades gracefully.
+
+---
+
+## Legacy .NET Audit Report
+
+The legacy audit generates a high-level analysis of a repository — useful for onboarding a legacy .NET codebase, planning modernization, or assessing architectural risk.
+
+### Run the audit
+
+```text
+POST /api/audit/legacy-dotnet
+Content-Type: application/json
+
+{
+  "repoPath": "D:\\Projects\\SomeRepo",
+  "useLlm": false,
+  "includeRoslyn": true,
+  "includeGpuSearch": true,
+  "includeDotNetPresets": true,
+  "includeDependencyInjection": true
+}
+```
+
+Or use the **Legacy Audit** panel in the LegacyLens UI — expand it under the repo path field, configure options, and click **Run legacy audit**.
+
+### Recommended demo targets
+
+Try the audit against these classic legacy repositories:
+
+| Repository | Why it's interesting |
+|---|---|
+| OrchardCMS/Orchard | ASP.NET MVC 5, `packages.config`, `App_Start`, .NET Framework |
+| BlogEngine.NET | Classic .NET Framework blog engine with `web.config` and `Global.asax` |
+| DNN Platform | WebForms-based portal, heavy `System.Web` usage |
+| nopCommerce (< 4.0 tag) | .NET Framework e-commerce, large multi-project solution |
+
+Clone the target, add its root to `AllowedRoots` in your `appsettings.Local.json`, and run the audit.
+
+### What the report includes
+
+- **Summary** — one-paragraph overview of detected signals and finding counts.
+- **Workspace** — solution/project file discovery (`.slnx`, `.sln`, `.csproj` counts).
+- **Technology signals** — framework, dependency, and configuration signals with confidence levels.
+- **Architecture signals** — derived signals such as legacy framework, multi-project solution, interface-driven design.
+- **Risk findings** — code-level and structural risks with severity, code, message, and evidence.
+- **Roslyn summary** — compiler-aware project/document/symbol counts (when workspace loads).
+- **Dependency injection summary** — DI registrations, constructor dependencies, and advisory findings.
+- **gpu-search findings** — pattern-based legacy signal results (when gpu-search-mcp is running).
+- **Recommended next steps** — deterministic, derived from detected findings.
+- **LLM summary** — optional. Requires `useLlm: true` and a configured local LLM provider.
+
+### Enrichment sources and confidence
+
+| Source | Confidence | Notes |
+|---|---|---|
+| File discovery | High | Direct evidence — file exists on disk |
+| Roslyn workspace | High | Compiler-accurate when workspace loads |
+| DI static analysis | Medium | Advisory — not runtime container verification |
+| gpu-search results | Medium | Heuristic/retrieval-based, not compiler-verified |
+
+All enrichment sources are local and read-only. No files are modified.

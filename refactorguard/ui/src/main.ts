@@ -235,6 +235,10 @@ type GpuSearchAuditSummary = {
   totalResults?: number;
   results?: GpuSearchAuditResult[] | null;
   errorMessage?: string | null;
+  usedSignalScan?: boolean;
+  signalCategories?: string[] | null;
+  scanLimitations?: string[] | null;
+  scanWarnings?: string[] | null;
 };
 
 type LegacyAuditReport = {
@@ -615,16 +619,29 @@ function renderAuditDiSummary(di: DiSummary | null): string {
 
 function renderAuditGpuSearchSummary(gpuSearch: GpuSearchAuditSummary | null): string {
   if (!gpuSearch) {
-    return renderSection('gpu-search Findings', '<p class="empty">gpu-search was not requested.</p>');
+    return renderSection('gpu-search Signal Scan', '<p class="empty">gpu-search was not requested.</p>');
   }
 
   if (!gpuSearch.wasAvailable) {
     return renderSection(
-      'gpu-search Findings',
+      'gpu-search Signal Scan',
       `<p class="error">gpu-search was unavailable.</p>
        ${gpuSearch.errorMessage ? `<p class="muted">${escapeHtml(gpuSearch.errorMessage)}</p>` : ''}`,
     );
   }
+
+  const modeBadge = gpuSearch.usedSignalScan
+    ? '<span class="badge badge-success">Signal Scan</span>'
+    : '<span class="badge badge-warning">Fallback: Individual Queries</span>';
+
+  const categoryPills = gpuSearch.usedSignalScan && (gpuSearch.signalCategories?.length ?? 0) > 0
+    ? `<div class="tag-list">${(gpuSearch.signalCategories ?? []).map((c) => `<span class="tag">${escapeHtml(c)}</span>`).join('')}</div>`
+    : '';
+
+  const scanWarnings = (gpuSearch.scanWarnings ?? []).map((w) => `<p class="warning">⚠ ${escapeHtml(w)}</p>`).join('');
+  const scanLimitations = (gpuSearch.scanLimitations ?? []).map((l) => `<li>${escapeHtml(l)}</li>`).join('');
+
+  const countLabel = gpuSearch.usedSignalScan ? 'Signals scanned' : 'Queries run';
 
   const resultItems = (gpuSearch.results ?? []).slice(0, 20).map((r) => `
     <article class="context-card">
@@ -637,13 +654,17 @@ function renderAuditGpuSearchSummary(gpuSearch: GpuSearchAuditSummary | null): s
   `).join('');
 
   return renderSection(
-    'gpu-search Findings',
+    'gpu-search Signal Scan',
     `
+      <div class="row">${modeBadge}</div>
       <p class="muted"><em>Results are heuristic/retrieval-based, not compiler-verified.</em></p>
+      ${categoryPills}
       <div class="meta-grid">
-        ${meta('Queries run', String(gpuSearch.queriesRun ?? 0))}
-        ${meta('Total results', String(gpuSearch.totalResults ?? 0))}
+        ${meta(countLabel, String(gpuSearch.queriesRun ?? 0))}
+        ${meta('Total matches', String(gpuSearch.totalResults ?? 0))}
       </div>
+      ${scanWarnings}
+      ${scanLimitations ? `<ul class="muted">${scanLimitations}</ul>` : ''}
       ${resultItems ? `<div class="context-list">${resultItems}</div>` : '<p class="empty">No results returned.</p>'}
     `,
   );

@@ -308,6 +308,34 @@ h2 {
   padding: 0.25rem 0.55rem;
 }
 
+.badge-success {
+  background: #ecfdf5;
+  border-color: #bbf7d0;
+  color: #047857;
+}
+
+.badge-warning {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #b45309;
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0.4rem 0;
+}
+
+.tag {
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  color: #374151;
+  font-size: 0.72rem;
+  padding: 0.15rem 0.45rem;
+}
+
 .severity-info {
   background: #eff6ff;
   border-color: #bfdbfe;

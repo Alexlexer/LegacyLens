@@ -20,7 +20,7 @@ public sealed class LegacyAuditMarkdownFormatterTests
         Assert.Contains("## Risk Findings", markdown);
         Assert.Contains("## Roslyn Summary", markdown);
         Assert.Contains("## Dependency Injection Summary", markdown);
-        Assert.Contains("## gpu-search Findings", markdown);
+        Assert.Contains("## gpu-search Signal Scan", markdown);
         Assert.Contains("## Recommended Next Steps", markdown);
         Assert.Contains("## Limitations", markdown);
     }
@@ -153,6 +153,48 @@ public sealed class LegacyAuditMarkdownFormatterTests
 
         Assert.Contains("unavailable or returned errors", markdown);
         Assert.Contains("Connection refused", markdown);
+    }
+
+    [Fact]
+    public void Format_ShowsSignalScanMode_WhenUsedSignalScan()
+    {
+        var report = BuildMinimalReport() with
+        {
+            GpuSearchSummary = new AuditGpuSearchSummary(
+                true, 5, 12,
+                [new AuditGpuSearchResult("System.Web", "src/Startup.cs", 3, null)],
+                null,
+                UsedSignalScan: true,
+                SignalCategories: ["Framework", "Quality"],
+                ScanLimitations: ["Results are heuristic only."],
+                ScanWarnings: null)
+        };
+
+        var markdown = new LegacyAuditMarkdownFormatter().Format(report);
+
+        Assert.Contains("Signal scan", markdown);
+        Assert.Contains("/scan/signals", markdown);
+        Assert.Contains("Signals scanned: 5", markdown);
+        Assert.Contains("Framework", markdown);
+        Assert.Contains("Results are heuristic only.", markdown);
+    }
+
+    [Fact]
+    public void Format_ShowsFallbackMode_WhenNotUsedSignalScan()
+    {
+        var report = BuildMinimalReport() with
+        {
+            GpuSearchSummary = new AuditGpuSearchSummary(
+                true, 17, 0,
+                [],
+                null,
+                UsedSignalScan: false)
+        };
+
+        var markdown = new LegacyAuditMarkdownFormatter().Format(report);
+
+        Assert.Contains("Individual queries (fallback)", markdown);
+        Assert.Contains("Queries run: 17", markdown);
     }
 
     [Fact]

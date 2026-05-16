@@ -1,5 +1,6 @@
 using RefactorGuard.Application.Audit;
 using RefactorGuard.Application.DotNetAnalysis;
+using RefactorGuard.Domain.Search;
 
 namespace RefactorGuard.Api.Tests;
 
@@ -75,6 +76,35 @@ public sealed class LegacyAuditContractTests
         Assert.Equal(12, summary.TotalResults);
         Assert.Single(summary.Results);
         Assert.Equal("System.Web", summary.Results[0].Query);
+        Assert.False(summary.UsedSignalScan);
+        Assert.Null(summary.SignalCategories);
+    }
+
+    [Fact]
+    public void AuditGpuSearchSummary_SignalScanFields_DefaultToFalseAndNull()
+    {
+        var summary = new AuditGpuSearchSummary(true, 3, 7, [], null);
+
+        Assert.False(summary.UsedSignalScan);
+        Assert.Null(summary.SignalCategories);
+        Assert.Null(summary.ScanLimitations);
+        Assert.Null(summary.ScanWarnings);
+    }
+
+    [Fact]
+    public void SignalScanDomainModels_ExposeStableContract()
+    {
+        var match = new SignalMatch("src/App.cs", null, 10, null, 0.9, null, "using System.Web;", "hybrid");
+        var signal = new RepositorySignal("fw-systemweb", "Framework", "System.Web", null, "high", "System.Web", [match]);
+        var scanSummary = new SignalScanSummary(1, 1, ["Framework"]);
+        var response = new SignalScanResponse("ok", ["Framework"], scanSummary, [signal], null, null);
+
+        Assert.Equal("fw-systemweb", signal.Id);
+        Assert.Equal("System.Web", signal.Label);
+        Assert.Single(signal.Matches);
+        Assert.Equal("src/App.cs", match.File);
+        Assert.Equal(1, scanSummary.SignalCount);
+        Assert.Equal("ok", response.Result);
     }
 
     [Fact]

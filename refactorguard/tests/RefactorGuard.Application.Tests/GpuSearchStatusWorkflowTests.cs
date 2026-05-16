@@ -54,6 +54,9 @@ public sealed class GpuSearchStatusWorkflowTests
 
         public Task<DependencyImpactResponse> GetDependencyImpactAsync(DependencyImpactRequest request, CancellationToken cancellationToken)
             => Task.FromResult(new DependencyImpactResponse("ok", request.Path, null, []));
+
+        public Task<SignalScanResponse> ScanSignalsAsync(SignalScanRequest request, CancellationToken cancellationToken)
+            => throw new HttpRequestException("Not found", null, System.Net.HttpStatusCode.NotFound);
     }
 
     private sealed class FailingGpuSearchClient : IGpuSearchClient
@@ -80,6 +83,9 @@ public sealed class GpuSearchStatusWorkflowTests
             => throw new HttpRequestException("unavailable");
 
         public Task<DependencyImpactResponse> GetDependencyImpactAsync(DependencyImpactRequest request, CancellationToken cancellationToken)
+            => throw new HttpRequestException("unavailable");
+
+        public Task<SignalScanResponse> ScanSignalsAsync(SignalScanRequest request, CancellationToken cancellationToken)
             => throw new HttpRequestException("unavailable");
     }
 }

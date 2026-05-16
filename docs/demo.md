@@ -127,6 +127,16 @@ The report is saved to SQLite and appears in the **Saved reports** panel.
 
 To include an LM Studio summary, tick **Include LM Studio summary** before clicking **Run review**.
 
+The report viewer is structured for demos:
+
+- **Summary** shows repository, created time, changed files, and provider/review mode.
+- **Findings** are shown as severity-badged cards.
+- **gpu-search Context** shows dependency impact, confidence, analysis mode, impacted files, warnings, limitations, related search results, and skeleton previews.
+- **LLM Summary** appears when LM Studio returns a summary.
+- **Raw Markdown** remains available in a collapsible block.
+
+Use the copy buttons to copy the full Markdown report, gpu-search context, or LM Studio summary.
+
 ### .NET analysis
 
 Click **.NET analysis**. LegacyLens runs all built-in preset searches through `gpu-search-mcp`:

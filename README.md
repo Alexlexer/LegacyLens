@@ -137,6 +137,8 @@ GET /api/reports/{id}
 DELETE /api/reports/{id}
 ```
 
+The UI report viewer renders structured sections for summary metadata, findings, gpu-search context, LM Studio summaries, and raw Markdown. It also shows confidence, warnings, limitations, related search results, skeleton previews, and copy buttons for Markdown/context/summary.
+
 Optionally request an LM Studio-enhanced summary:
 
 ```json

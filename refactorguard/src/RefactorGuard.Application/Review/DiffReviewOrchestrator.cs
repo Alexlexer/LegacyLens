@@ -1,3 +1,4 @@
+using RefactorGuard.Application.DotNetAnalysis;
 using RefactorGuard.Application.Git;
 using RefactorGuard.Application.Reports;
 using RefactorGuard.Application.Search;
@@ -13,7 +14,8 @@ public sealed class DiffReviewOrchestrator(
     IReviewPromptBuilder promptBuilder,
     IReviewLlmProvider llmProvider,
     IReportRepository reportRepository,
-    ReviewEnrichmentOptions enrichmentOptions) : IReviewOrchestrator
+    ReviewEnrichmentOptions enrichmentOptions,
+    IRoslynReferenceAnalyzer roslynReferenceAnalyzer) : IReviewOrchestrator
 {
     public async Task<DiffReviewReport> ReviewDiffAsync(
         DiffReviewRequest request,
@@ -25,10 +27,13 @@ public sealed class DiffReviewOrchestrator(
 
         var findings = new List<ReviewFinding>(BuildDeterministicFindings(diff));
         var gpuSearchContext = await TryEnrichWithGpuSearchAsync(diff, findings, cancellationToken);
+        var roslynContext = diff.Files.Any(f => f.Path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+            ? await TryEnrichWithRoslynAsync(diff, findings, cancellationToken)
+            : null;
 
         var llmSummary = request.UseLlm
             ? await llmProvider.GenerateReviewAsync(
-                promptBuilder.Build(diff, findings, gpuSearchContext),
+                promptBuilder.Build(diff, findings, gpuSearchContext, roslynContext),
                 cancellationToken)
             : null;
 
@@ -42,7 +47,8 @@ public sealed class DiffReviewOrchestrator(
             string.Empty,
             llmSummary,
             request.UseLlm ? llmProvider.Name : "Deterministic",
-            gpuSearchContext);
+            gpuSearchContext,
+            roslynContext);
 
         var finalReport = report with { Markdown = reportFormatter.Format(report) };
         await reportRepository.SaveAsync(finalReport, cancellationToken);
@@ -173,6 +179,106 @@ public sealed class DiffReviewOrchestrator(
         }
 
         return new ChangedFileContext(filePath, impact, skeleton, relatedResults, error);
+    }
+
+    private async Task<RoslynReviewContext> TryEnrichWithRoslynAsync(
+        GitDiffPreviewResponse diff,
+        List<ReviewFinding> findings,
+        CancellationToken cancellationToken)
+    {
+        var csFiles = diff.Files
+            .Where(f => f.Path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+            .Take(enrichmentOptions.MaxSymbolsForReferenceAnalysis)
+            .ToList();
+
+        var changedSymbols = new List<ChangedSymbolSummary>();
+        var allReferences = new List<RoslynReferenceSummary>();
+        var allWarnings = new List<string>();
+        string? workspacePath = null;
+        DotNetWorkspaceKind? workspaceKind = null;
+        string? errorMessage = null;
+
+        foreach (var file in csFiles)
+        {
+            if (allReferences.Count >= enrichmentOptions.MaxTotalRoslynReferences)
+                break;
+
+            var symbolName = Path.GetFileNameWithoutExtension(file.Path);
+            if (string.IsNullOrWhiteSpace(symbolName))
+                continue;
+
+            try
+            {
+                var result = await roslynReferenceAnalyzer.FindReferencesAsync(
+                    new RoslynReferenceAnalysisRequest(
+                        diff.RepoPath,
+                        symbolName,
+                        FilePath: file.Path,
+                        MaxResults: enrichmentOptions.MaxReferencesPerSymbol),
+                    cancellationToken);
+
+                workspacePath ??= result.WorkspacePath;
+                workspaceKind ??= result.WorkspaceKind;
+                allWarnings.AddRange(result.Warnings);
+
+                if (!result.Success)
+                {
+                    errorMessage ??= result.ErrorMessage;
+                    continue;
+                }
+
+                foreach (var match in result.MatchedSymbols)
+                {
+                    changedSymbols.Add(new ChangedSymbolSummary(
+                        match.Name,
+                        match.FullName,
+                        match.Kind,
+                        match.FilePath,
+                        match.Line,
+                        match.Column,
+                        match.ProjectName));
+                }
+
+                var remaining = enrichmentOptions.MaxTotalRoslynReferences - allReferences.Count;
+                allReferences.AddRange(result.References.Take(remaining).Select(r =>
+                    new RoslynReferenceSummary(
+                        r.SymbolName,
+                        r.SymbolFullName,
+                        r.SymbolKind,
+                        r.FilePath,
+                        r.Line,
+                        r.Column,
+                        r.ProjectName,
+                        r.ContainingSymbol,
+                        r.ReferenceKind,
+                        r.IsDefinition)));
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                errorMessage ??= $"Roslyn analysis failed for {symbolName}: {ex.Message}";
+            }
+        }
+
+        var success = changedSymbols.Count > 0 || (errorMessage is null && allWarnings.Count == 0);
+
+        if (!success || (changedSymbols.Count == 0 && errorMessage is not null))
+        {
+            findings.Add(new ReviewFinding(
+                "roslyn-unavailable",
+                "Info",
+                null,
+                "Roslyn reference analysis unavailable",
+                errorMessage ?? "Roslyn workspace could not be loaded. Reference analysis was skipped."));
+        }
+
+        return new RoslynReviewContext(
+            success,
+            workspacePath,
+            workspaceKind,
+            changedSymbols,
+            allReferences,
+            allWarnings.Distinct().ToList(),
+            errorMessage);
     }
 
     private static string? Truncate(string? value, int maxLength, string suffix)

@@ -1,3 +1,4 @@
+using RefactorGuard.Application.DotNetAnalysis;
 using RefactorGuard.Application.Review;
 using RefactorGuard.Domain.Git;
 
@@ -200,6 +201,80 @@ public sealed class MarkdownReviewReportFormatterTests
 
         Assert.Contains("src/UserController.cs", markdown);
         Assert.Contains("references type UserService", markdown);
+    }
+
+    [Fact]
+    public void Format_IncludesRoslynSection_WhenContextPresent()
+    {
+        var context = new RoslynReviewContext(
+            true,
+            "/workspace/App.sln",
+            DotNetWorkspaceKind.Sln,
+            [new ChangedSymbolSummary("UserService", "SampleApp.UserService", "class", "src/UserService.cs", 5, 1, "SampleApp")],
+            [
+                new RoslynReferenceSummary(
+                    "UserService", "SampleApp.UserService", "class",
+                    "src/AuthController.cs", 28, 5, "SampleApp",
+                    "SampleApp.AuthController.Register",
+                    "Reference", false)
+            ],
+            [],
+            null);
+        var report = new DiffReviewReport(
+            "report-r1",
+            "repo",
+            DateTimeOffset.UnixEpoch,
+            1,
+            [new GitDiffFile("src/UserService.cs", "M", 5, 0)],
+            [],
+            string.Empty,
+            RoslynContext: context);
+
+        var markdown = new MarkdownReviewReportFormatter().Format(report);
+
+        Assert.Contains("Roslyn Reference Context", markdown);
+        Assert.Contains("UserService", markdown);
+        Assert.Contains("src/AuthController.cs", markdown);
+        Assert.Contains("References: 1", markdown);
+    }
+
+    [Fact]
+    public void Format_IncludesRoslynUnavailableMessage_WhenFailed()
+    {
+        var context = new RoslynReviewContext(
+            false, null, null, [], [], [], "No .sln found.");
+        var report = new DiffReviewReport(
+            "report-r2",
+            "repo",
+            DateTimeOffset.UnixEpoch,
+            1,
+            [new GitDiffFile("src/App.cs", "M", 2, 0)],
+            [],
+            string.Empty,
+            RoslynContext: context);
+
+        var markdown = new MarkdownReviewReportFormatter().Format(report);
+
+        Assert.Contains("Roslyn Reference Context", markdown);
+        Assert.Contains("unavailable", markdown);
+        Assert.Contains("No .sln found.", markdown);
+    }
+
+    [Fact]
+    public void Format_OmitsRoslynSection_WhenContextIsNull()
+    {
+        var report = new DiffReviewReport(
+            "report-r3",
+            "repo",
+            DateTimeOffset.UnixEpoch,
+            0,
+            [],
+            [],
+            string.Empty);
+
+        var markdown = new MarkdownReviewReportFormatter().Format(report);
+
+        Assert.DoesNotContain("Roslyn Reference Context", markdown);
     }
 
     [Fact]

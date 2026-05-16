@@ -1,3 +1,4 @@
+using RefactorGuard.Application.DotNetAnalysis;
 using RefactorGuard.Application.Review;
 using RefactorGuard.Domain.Git;
 
@@ -60,5 +61,35 @@ public sealed class ReviewPromptBuilderTests
         var prompt = new ReviewPromptBuilder().Build(diff, []);
 
         Assert.Null(prompt.GpuSearchContext);
+    }
+
+    [Fact]
+    public void Build_IncludesRoslynContext_WhenProvided()
+    {
+        var diff = new GitDiffPreviewResponse("repo", 1, [], "+change");
+        var roslynContext = new RoslynReviewContext(
+            true,
+            "/workspace/App.sln",
+            DotNetWorkspaceKind.Sln,
+            [new ChangedSymbolSummary("UserService", "SampleApp.UserService", "class", "src/UserService.cs", 5, 1, "SampleApp")],
+            [],
+            [],
+            null);
+
+        var prompt = new ReviewPromptBuilder().Build(diff, [], roslynContext: roslynContext);
+
+        Assert.NotNull(prompt.RoslynContext);
+        Assert.True(prompt.RoslynContext!.Success);
+        Assert.Single(prompt.RoslynContext.ChangedSymbols);
+    }
+
+    [Fact]
+    public void Build_LeavesRoslynContextNull_WhenNotProvided()
+    {
+        var diff = new GitDiffPreviewResponse("repo", 1, [], "+change");
+
+        var prompt = new ReviewPromptBuilder().Build(diff, []);
+
+        Assert.Null(prompt.RoslynContext);
     }
 }

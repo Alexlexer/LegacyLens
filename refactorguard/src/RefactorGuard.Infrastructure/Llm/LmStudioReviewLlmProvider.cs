@@ -40,13 +40,14 @@ public sealed class LmStudioReviewLlmProvider(
                 $"- {finding.Severity} {finding.RuleId} {finding.Path}: {finding.Title} - {finding.Description}"));
 
         var gpuContext = BuildGpuContextSection(prompt.GpuSearchContext);
+        var roslynContext = BuildRoslynContextSection(prompt.RoslynContext);
 
         return $"""
             Repository: {prompt.RepoPath}
 
             Deterministic findings:
             {findings}
-            {gpuContext}
+            {gpuContext}{roslynContext}
             Git diff:
             ```diff
             {prompt.Diff}
@@ -111,6 +112,37 @@ public sealed class LmStudioReviewLlmProvider(
                     var line = r.LineStart.HasValue ? $" L{r.LineStart}" : string.Empty;
                     sb.AppendLine($"      - {r.File}{line}");
                 }
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    private static string BuildRoslynContextSection(RoslynReviewContext? context)
+    {
+        if (context is null || !context.Success || context.ChangedSymbols.Count == 0)
+            return string.Empty;
+
+        var sb = new StringBuilder();
+        sb.AppendLine();
+        sb.AppendLine("Roslyn reference context (compiler-accurate C# symbol references):");
+        sb.AppendLine("NOTE: These are compiler-verified references. Treat them as stronger evidence than heuristic gpu-search dependency impact.");
+
+        foreach (var symbol in context.ChangedSymbols)
+        {
+            var refs = context.SymbolReferences
+                .Where(r => string.Equals(r.SymbolName, symbol.Name, StringComparison.OrdinalIgnoreCase))
+                .Where(r => !r.IsDefinition)
+                .ToList();
+
+            sb.AppendLine($"  Changed symbol: {symbol.Name} ({symbol.Kind}) in {symbol.ProjectName}");
+            sb.AppendLine($"    Definition: {symbol.FilePath}:{symbol.Line}");
+            sb.AppendLine($"    References: {refs.Count}");
+
+            foreach (var r in refs.Take(5))
+            {
+                var container = string.IsNullOrWhiteSpace(r.ContainingSymbol) ? string.Empty : $" in {r.ContainingSymbol}";
+                sb.AppendLine($"      - {r.FilePath}:{r.Line}{container}");
             }
         }
 

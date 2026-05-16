@@ -117,11 +117,11 @@ Click **Preview diff**. LegacyLens calls `git diff HEAD` on the repository and s
 
 Click **Run review**. LegacyLens generates a Markdown report with:
 
-- Deterministic findings (empty diff, large change, test changes, config changes)
-- gpu-search context: dependency impact with confidence/analysis-mode metadata, impacted-file reasons when available, related code, and file skeletons for each changed file
-- An `Info` finding if gpu-search-mcp was not reachable
+- **Deterministic findings** — empty diff, large change, test changes, config changes.
+- **Roslyn Reference Context** — for each changed `.cs` file, LegacyLens identifies the primary symbol by filename convention and runs Roslyn reference analysis to find how many callers reference it across the solution. This is compiler-accurate. An `Info` finding is added if Roslyn workspace loading fails (e.g. no `.sln`/`.csproj` found).
+- **gpu-search Context** — when gpu-search-mcp is running: dependency impact with confidence/analysis-mode metadata, impacted-file reasons, related code, and file skeletons for each changed file. An `Info` finding is added if gpu-search-mcp was not reachable.
 
-> **Dependency impact is advisory.** gpu-search-mcp analyses imports and type/name heuristics — it is not compiler-accurate. Confidence, analysis mode, impacted-file reasons, warnings, and limitations are shown in the report when provided by gpu-search-mcp.
+> **Dependency impact is advisory.** gpu-search-mcp analyses imports and type/name heuristics — it is not compiler-accurate. Roslyn references are compiler-verified facts and should be weighted more heavily.
 
 Enrichment limits are configurable in `LegacyLens:ReviewEnrichment`:
 
@@ -133,13 +133,18 @@ Enrichment limits are configurable in `LegacyLens:ReviewEnrichment`:
       "MaxSearchResultsPerFile": 5,
       "MaxSkeletonLength": 4000,
       "MaxBlockLength": 4000,
-      "MaxRelatedResultSnippetLength": 1000
+      "MaxRelatedResultSnippetLength": 1000,
+      "MaxSymbolsForReferenceAnalysis": 10,
+      "MaxReferencesPerSymbol": 50,
+      "MaxTotalRoslynReferences": 200
     }
   }
 }
 ```
 
 Defaults are safe and preserve demo behavior. Lower values are faster and create smaller reports; higher values provide deeper context but can increase token usage and local LLM summary time.
+
+The Roslyn limits control how many C# files receive reference analysis (`MaxSymbolsForReferenceAnalysis`), how many references are collected per symbol (`MaxReferencesPerSymbol`), and the global cap across all symbols (`MaxTotalRoslynReferences`). Roslyn analysis requires a `.sln`, `.slnx`, or `.csproj` discoverable from the repository root and a local .NET SDK installation.
 
 The report is saved to SQLite and appears in the **Saved reports** panel.
 

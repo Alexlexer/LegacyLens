@@ -40,6 +40,7 @@ public sealed class MarkdownReviewReportFormatter : IReviewReportFormatter
         }
 
         AppendGpuSearchSection(markdown, report.GpuSearchContext);
+        AppendRoslynSection(markdown, report.RoslynContext);
 
         if (!string.IsNullOrWhiteSpace(report.LlmSummary))
         {
@@ -50,6 +51,73 @@ public sealed class MarkdownReviewReportFormatter : IReviewReportFormatter
         }
 
         return markdown.ToString();
+    }
+
+    private static void AppendRoslynSection(StringBuilder markdown, RoslynReviewContext? context)
+    {
+        if (context is null)
+            return;
+
+        markdown.AppendLine();
+        markdown.AppendLine("## Roslyn Reference Context");
+        markdown.AppendLine();
+
+        if (!context.Success || (context.ChangedSymbols.Count == 0 && context.ErrorMessage is not null))
+        {
+            markdown.AppendLine("Roslyn reference analysis was unavailable. Review continued with deterministic and gpu-search context.");
+            if (!string.IsNullOrWhiteSpace(context.ErrorMessage))
+            {
+                markdown.AppendLine();
+                markdown.AppendLine($"> {context.ErrorMessage}");
+            }
+
+            return;
+        }
+
+        if (context.ChangedSymbols.Count == 0)
+        {
+            markdown.AppendLine("No changed C# symbols were matched by Roslyn.");
+            return;
+        }
+
+        if (context.WorkspacePath is not null)
+            markdown.AppendLine($"Workspace: `{context.WorkspacePath}`");
+        if (context.WorkspaceKind is not null)
+            markdown.AppendLine($"Workspace kind: {context.WorkspaceKind}");
+        markdown.AppendLine();
+
+        foreach (var symbol in context.ChangedSymbols)
+        {
+            var refs = context.SymbolReferences
+                .Where(r => string.Equals(r.SymbolName, symbol.Name, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(r.SymbolFullName, symbol.FullName, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            var nonDefinitionRefs = refs.Where(r => !r.IsDefinition).ToList();
+
+            markdown.AppendLine($"### {symbol.Name} ({symbol.Kind})");
+            markdown.AppendLine();
+            markdown.AppendLine($"- Kind: {symbol.Kind}");
+            markdown.AppendLine($"- Project: {symbol.ProjectName}");
+            markdown.AppendLine($"- Definition: `{symbol.FilePath}`:{symbol.Line}");
+            markdown.AppendLine($"- References: {nonDefinitionRefs.Count}");
+
+            if (nonDefinitionRefs.Count > 0)
+            {
+                markdown.AppendLine();
+                markdown.AppendLine("References:");
+                foreach (var r in nonDefinitionRefs.Take(10))
+                {
+                    var container = string.IsNullOrWhiteSpace(r.ContainingSymbol) ? string.Empty : $" — in {r.ContainingSymbol}";
+                    markdown.AppendLine($"- `{r.FilePath}`:{r.Line}{container}");
+                }
+            }
+
+            markdown.AppendLine();
+        }
+
+        var warnings = context.Warnings ?? [];
+        foreach (var warning in warnings)
+            markdown.AppendLine($"> Warning: {warning}");
     }
 
     private static void AppendGpuSearchSection(StringBuilder markdown, GpuSearchReviewContext? context)

@@ -113,7 +113,13 @@ Content-Type: application/json
 { "repoPath": "D:\\Projects\\SomeRepo" }
 ```
 
-When `gpu-search-mcp` is running, the report includes dependency impact (with confidence, analysis mode, warnings, limitations, and impacted-file reasons when provided), file skeletons, and related search results for each changed file. Dependency impact and reasons are advisory — gpu-search-mcp uses import/type/name heuristics, not a compiler. If gpu-search-mcp is not running, the review still completes with a deterministic report and adds an `Info` finding noting the unavailability.
+Review reports combine three enrichment layers:
+
+- **Roslyn reference context** — compiler-aware C# symbol references for changed `.cs` files. LegacyLens identifies the primary symbol in each changed file by filename convention, runs Roslyn reference analysis, and reports how many callers reference it across the solution. This uses the local .NET SDK/MSBuild and does not require gpu-search-mcp. If no `.sln`/`.csproj` is found or Roslyn fails, an `Info` finding is added and the review still completes.
+- **gpu-search context** — when gpu-search-mcp is running: dependency impact (with confidence, analysis mode, warnings, and limitations), file skeletons, and related search results for each changed file. Dependency impact is advisory — gpu-search-mcp uses import/type/name heuristics, not a compiler.
+- **Deterministic findings** — rule-based observations (large diff, config change, test change, empty diff).
+
+If gpu-search-mcp is not running, the review still completes with deterministic + Roslyn context and adds an `Info` finding.
 
 Two-process workflow (full enrichment):
 
@@ -193,6 +199,9 @@ gpu-search enrichment limits are configurable under `LegacyLens:ReviewEnrichment
 - `MaxSkeletonLength`: maximum skeleton preview characters.
 - `MaxBlockLength`: reserved cap for block-level context.
 - `MaxRelatedResultSnippetLength`: maximum related result snippet characters.
+- `MaxSymbolsForReferenceAnalysis`: changed C# files that receive Roslyn reference analysis (one symbol per file by filename convention).
+- `MaxReferencesPerSymbol`: maximum references collected per symbol.
+- `MaxTotalRoslynReferences`: cap on total Roslyn references across all symbols.
 
 Defaults preserve existing behavior and protect prompt size/local performance. Lower values produce faster, smaller reports; higher values provide deeper context but can increase report size, token usage, and LLM summary latency.
 

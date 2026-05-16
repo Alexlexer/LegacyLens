@@ -65,6 +65,20 @@ public sealed class SqliteReportRepositoryTests : IDisposable
     }
 
     [Fact]
+    public async Task SavedAuditReport_CanBeExportedAfterRetrieval()
+    {
+        var repository = CreateRepository();
+        var exportService = new AuditReportExportService(new LegacyAuditMarkdownFormatter());
+        await repository.SaveAuditAsync(MakeAuditReport("audit-export", @"C:\projects\MyApp"), CancellationToken.None);
+
+        var fetched = await repository.GetAuditByIdAsync("audit-export", CancellationToken.None);
+
+        Assert.NotNull(fetched);
+        Assert.Equal("# Audit", exportService.ExportMarkdown(fetched));
+        Assert.Contains("<h1>Legacy .NET Audit Report</h1>", exportService.ExportHtml(fetched));
+    }
+
+    [Fact]
     public async Task ListAsync_ReturnsBothReportTypes()
     {
         var repository = CreateRepository();

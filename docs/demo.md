@@ -175,6 +175,15 @@ Findings include file path, line number, and a code snippet.
 
 The **Saved reports** panel lists all generated reports. Click **View** to reload a report or **Delete** to remove it.
 
+Saved **Legacy Audit** reports also include **Export Markdown** and **Export HTML** buttons. These trigger local downloads from:
+
+```text
+GET /api/audit/reports/{id}/export/markdown
+GET /api/audit/reports/{id}/export/html
+```
+
+The HTML export is self-contained with embedded CSS and no CDN dependencies. Exported reports may include repository paths, snippets, findings, and optional LLM summaries, so review them before sharing externally.
+
 ---
 
 ## Step 7 — Find saved reports

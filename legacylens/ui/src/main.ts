@@ -697,6 +697,9 @@ async function loadReports(): Promise<void> {
     reports.querySelectorAll<HTMLButtonElement>('[data-delete]').forEach((button) => {
       button.addEventListener('click', () => deleteReport(button.dataset.delete ?? ''));
     });
+    reports.querySelectorAll<HTMLButtonElement>('[data-export]').forEach((button) => {
+      button.addEventListener('click', () => exportAuditReport(button.dataset.export ?? '', button.dataset.format ?? ''));
+    });
   } catch (error) {
     reports.innerHTML = `<p class="error">Could not load saved reports: ${escapeHtml(errorMessage(error))}</p>`;
   }
@@ -724,6 +727,43 @@ async function deleteReport(id: string): Promise<void> {
     await loadReports();
     showToast('Report deleted.');
   });
+}
+
+async function exportAuditReport(id: string, format: string): Promise<void> {
+  if (!id || (format !== 'markdown' && format !== 'html')) {
+    showToast('Export is unavailable for this report.', true);
+    return;
+  }
+
+  await run(`Exporting ${format}...`, async () => {
+    const response = await fetch(`/api/audit/reports/${encodeURIComponent(id)}/export/${format}`);
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || `${response.status} ${response.statusText}`);
+    }
+
+    const blob = await response.blob();
+    const fileName = fileNameFromDisposition(response.headers.get('content-disposition'))
+      ?? `legacy-audit-${id}.${format === 'markdown' ? 'md' : 'html'}`;
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    showToast(`Exported ${fileName}.`);
+  });
+}
+
+function fileNameFromDisposition(disposition: string | null): string | null {
+  if (!disposition) {
+    return null;
+  }
+
+  const match = /filename\*?=(?:UTF-8''|")?([^";]+)/i.exec(disposition);
+  return match ? decodeURIComponent(match[1].replaceAll('"', '').trim()) : null;
 }
 
 function renderReport(report: ReviewReport): void {
@@ -1008,6 +1048,8 @@ function reportItem(report: ReportSummary): string {
       </div>
       <div class="actions compact">
         <button class="ghost small" data-view="${escapeHtml(id)}" data-view-type="${escapeHtml(type)}">View</button>
+        ${isAudit ? `<button class="ghost small" data-export="${escapeHtml(id)}" data-format="markdown">Export Markdown</button>` : ''}
+        ${isAudit ? `<button class="ghost small" data-export="${escapeHtml(id)}" data-format="html">Export HTML</button>` : ''}
         <button class="danger small" data-delete="${escapeHtml(id)}">Delete</button>
       </div>
     </article>

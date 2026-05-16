@@ -1,3 +1,4 @@
+using System.Text;
 using LegacyLens.Application;
 using LegacyLens.Application.Audit;
 using LegacyLens.Application.DotNetAnalysis;
@@ -266,6 +267,40 @@ app.MapGet("/api/audit/reports/{id}", async (
 {
     var report = await reports.GetAuditByIdAsync(id, cancellationToken);
     return report is null ? Results.NotFound() : Results.Ok(report);
+});
+app.MapGet("/api/audit/reports/{id}/export/markdown", async (
+    string id,
+    IReportRepository reports,
+    IAuditReportExportService exportService,
+    CancellationToken cancellationToken) =>
+{
+    var report = await reports.GetAuditByIdAsync(id, cancellationToken);
+    if (report is null)
+        return Results.NotFound();
+
+    var markdown = exportService.ExportMarkdown(report);
+    var fileName = exportService.BuildFileName(report, "md");
+    return Results.File(
+        Encoding.UTF8.GetBytes(markdown),
+        "text/markdown; charset=utf-8",
+        fileName);
+});
+app.MapGet("/api/audit/reports/{id}/export/html", async (
+    string id,
+    IReportRepository reports,
+    IAuditReportExportService exportService,
+    CancellationToken cancellationToken) =>
+{
+    var report = await reports.GetAuditByIdAsync(id, cancellationToken);
+    if (report is null)
+        return Results.NotFound();
+
+    var html = exportService.ExportHtml(report);
+    var fileName = exportService.BuildFileName(report, "html");
+    return Results.File(
+        Encoding.UTF8.GetBytes(html),
+        "text/html; charset=utf-8",
+        fileName);
 });
 
 app.Run();

@@ -252,7 +252,7 @@ The review falls back to the deterministic provider. Check that LM Studio's loca
 Ollama is optional and local-first. Pull a model and start Ollama:
 
 ```bash
-ollama pull qwen2.5-coder:7b
+ollama pull gemma3:4b
 ollama serve
 ```
 
@@ -266,14 +266,16 @@ Configure LegacyLens:
     },
     "Ollama": {
       "BaseUrl": "http://127.0.0.1:11434",
-      "Model": "qwen2.5-coder:7b",
-      "TimeoutSeconds": 120
+      "Model": "gemma3:4b",
+      "TimeoutSeconds": 180,
+      "AutoPullModel": false,
+      "PullTimeoutSeconds": 600
     }
   }
 }
 ```
 
-`useLlm=true` is still required. Prompts may contain diffs and code snippets, so use a trusted local/private Ollama instance. Ollama works well with an RTX GPU when configured to use it.
+`useLlm=true` is still required. The UI can check Ollama `/api/tags` status and explicitly pull the configured model through `/api/pull`; automatic pulls are disabled by default to avoid surprise multi-GB downloads. gpu-search-mcp does not use Ollama. Prompts may contain diffs and code snippets, so use a trusted local/private Ollama instance.
 
 ### SQLite database path
 

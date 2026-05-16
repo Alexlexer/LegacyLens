@@ -6,7 +6,8 @@ namespace LegacyLens.Infrastructure.Llm;
 
 public sealed class OllamaReviewLlmProvider(
     HttpClient httpClient,
-    Microsoft.Extensions.Options.IOptions<OllamaOptions> options) : IReviewLlmProvider
+    Microsoft.Extensions.Options.IOptions<OllamaOptions> options,
+    IOllamaModelService modelService) : IReviewLlmProvider
 {
     public string Name => "Ollama";
 
@@ -14,6 +15,8 @@ public sealed class OllamaReviewLlmProvider(
         LlmReviewPrompt prompt,
         CancellationToken cancellationToken)
     {
+        await EnsureModelAvailableAsync(cancellationToken);
+
         var request = new OllamaChatRequest(
             options.Value.Model,
             [
@@ -36,6 +39,26 @@ public sealed class OllamaReviewLlmProvider(
         }
 
         return content;
+    }
+
+    private async Task EnsureModelAvailableAsync(CancellationToken cancellationToken)
+    {
+        var status = await modelService.GetStatusAsync(cancellationToken);
+        if (!status.ServerReachable)
+            throw new HttpRequestException(status.Message);
+
+        if (status.ModelInstalled)
+            return;
+
+        if (!options.Value.AutoPullModel)
+        {
+            throw new InvalidOperationException(
+                $"Ollama model '{options.Value.Model}' is not installed. Pull it from the UI or run: ollama pull {options.Value.Model}");
+        }
+
+        var pull = await modelService.PullConfiguredModelAsync(cancellationToken);
+        if (!pull.Success)
+            throw new InvalidOperationException($"{pull.Message} {pull.Error}".Trim());
     }
 
     private static string BuildUserPrompt(LlmReviewPrompt prompt)

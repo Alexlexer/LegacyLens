@@ -35,6 +35,25 @@ public sealed class OllamaOptionsTests
         Assert.Contains(results, r => r.MemberNames.Contains(nameof(OllamaOptions.TimeoutSeconds)));
     }
 
+    [Fact]
+    public void Defaults_DoNotAutoPullModels()
+    {
+        var options = new OllamaOptions();
+
+        Assert.False(options.AutoPullModel);
+        Assert.Equal(600, options.PullTimeoutSeconds);
+    }
+
+    [Fact]
+    public void Validation_FailsWhenPullTimeoutIsNotPositive()
+    {
+        var options = new OllamaOptions { PullTimeoutSeconds = 0 };
+
+        var results = Validate(options);
+
+        Assert.Contains(results, r => r.MemberNames.Contains(nameof(OllamaOptions.PullTimeoutSeconds)));
+    }
+
     private static List<ValidationResult> Validate(OllamaOptions options)
     {
         var results = new List<ValidationResult>();

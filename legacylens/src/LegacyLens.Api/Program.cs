@@ -9,6 +9,7 @@ using LegacyLens.Application.Search;
 using LegacyLens.Domain.Common;
 using LegacyLens.Domain.Git;
 using LegacyLens.Infrastructure;
+using LegacyLens.Infrastructure.Llm;
 using LegacyLens.Infrastructure.Security;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -28,6 +29,33 @@ app.MapGet("/api/search/status", async (
 {
     var status = await workflow.GetStatusAsync(cancellationToken);
     return Results.Ok(status);
+});
+app.MapGet("/api/llm/ollama/status", async (
+    IOllamaModelService ollamaModelService,
+    CancellationToken cancellationToken) =>
+{
+    var status = await ollamaModelService.GetStatusAsync(cancellationToken);
+    return Results.Ok(status);
+});
+app.MapPost("/api/llm/ollama/pull", async (
+    OllamaPullRequest request,
+    IOllamaModelService ollamaModelService,
+    CancellationToken cancellationToken) =>
+{
+    if (!string.IsNullOrWhiteSpace(request.Model) &&
+        !OllamaModelService.IsValidModelName(request.Model))
+    {
+        return Results.BadRequest(new ProblemDetailsResponse(
+            "https://LegacyLens.local/errors/invalid-ollama-model",
+            "Invalid Ollama model",
+            StatusCodes.Status400BadRequest,
+            "Model names may contain only letters, numbers, dash, underscore, slash, dot, and colon."));
+    }
+
+    var result = string.IsNullOrWhiteSpace(request.Model)
+        ? await ollamaModelService.PullConfiguredModelAsync(cancellationToken)
+        : await ollamaModelService.PullModelAsync(request.Model, cancellationToken);
+    return Results.Ok(result);
 });
 app.MapPost("/api/audit/legacy-dotnet", async (
     LegacyAuditRequest request,
@@ -306,3 +334,5 @@ app.MapGet("/api/audit/reports/{id}/export/html", async (
 app.Run();
 
 public partial class Program;
+
+public sealed record OllamaPullRequest(string? Model = null);

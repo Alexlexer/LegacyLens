@@ -245,7 +245,7 @@ Good candidate repositories include:
 
 - **Roslyn summary** — compiler-aware when workspace loads. Reports project/document/symbol/class/interface/method counts. Falls back gracefully if no `.sln`/`.csproj` found.
 - **DI analysis** — static analysis of `IServiceCollection` registration patterns and constructor dependencies. Advisory, not runtime verification.
-- **gpu-search findings** — pattern-based scans for legacy patterns (`System.Web`, `SqlConnection`, `catch (Exception)`, `.Result`, etc.) when gpu-search-mcp is running. Heuristic/retrieval-based, not compiler-verified.
+- **gpu-search signal scan** — when gpu-search-mcp is running, LegacyLens calls `POST /scan/signals` to retrieve categorized repository signals in a single request. If `/scan/signals` is not supported (older gpu-search-mcp versions), it automatically falls back to running individual hybrid search queries (`System.Web`, `SqlConnection`, `catch (Exception)`, `.Result`, etc.) and adds an `Info` finding. All gpu-search results are heuristic/retrieval-based, not compiler-verified.
 - **Recommended next steps** — deterministic, derived from detected findings.
 - **LLM summary** — optional. Uses the configured local LLM provider (LM Studio or Ollama). Advisory only.
 

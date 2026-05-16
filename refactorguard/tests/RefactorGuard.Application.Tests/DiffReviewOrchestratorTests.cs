@@ -345,6 +345,9 @@ public sealed class DiffReviewOrchestratorTests
 
         public Task<DependencyImpactResponse> GetDependencyImpactAsync(DependencyImpactRequest request, CancellationToken cancellationToken)
             => Task.FromResult(new DependencyImpactResponse("ok", request.Path, null, []));
+
+        public Task<SignalScanResponse> ScanSignalsAsync(SignalScanRequest request, CancellationToken cancellationToken)
+            => throw new HttpRequestException("Not found", null, System.Net.HttpStatusCode.NotFound);
     }
 
     private sealed class FailingGpuSearchClient : IGpuSearchClient
@@ -371,6 +374,9 @@ public sealed class DiffReviewOrchestratorTests
             => throw new HttpRequestException("unavailable");
 
         public Task<DependencyImpactResponse> GetDependencyImpactAsync(DependencyImpactRequest request, CancellationToken cancellationToken)
+            => throw new HttpRequestException("unavailable");
+
+        public Task<SignalScanResponse> ScanSignalsAsync(SignalScanRequest request, CancellationToken cancellationToken)
             => throw new HttpRequestException("unavailable");
     }
 
@@ -407,6 +413,9 @@ public sealed class DiffReviewOrchestratorTests
 
         public Task<DependencyImpactResponse> GetDependencyImpactAsync(DependencyImpactRequest request, CancellationToken cancellationToken)
             => Task.FromResult(new DependencyImpactResponse("ok", request.Path, null, impactedFiles ?? []));
+
+        public Task<SignalScanResponse> ScanSignalsAsync(SignalScanRequest request, CancellationToken cancellationToken)
+            => throw new HttpRequestException("Not found", null, System.Net.HttpStatusCode.NotFound);
     }
 
     private sealed class NullRoslynReferenceAnalyzer : IRoslynReferenceAnalyzer
@@ -494,5 +503,8 @@ public sealed class DiffReviewOrchestratorTests
 
         public Task<DependencyImpactResponse> GetDependencyImpactAsync(DependencyImpactRequest request, CancellationToken cancellationToken)
             => throw new HttpRequestException("impact read failed");
+
+        public Task<SignalScanResponse> ScanSignalsAsync(SignalScanRequest request, CancellationToken cancellationToken)
+            => throw new HttpRequestException("Not found", null, System.Net.HttpStatusCode.NotFound);
     }
 }

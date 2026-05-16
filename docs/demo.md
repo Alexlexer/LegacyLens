@@ -435,7 +435,7 @@ Clone the target, add its root to `AllowedRoots` in your `appsettings.Local.json
 - **Risk findings** — code-level and structural risks with severity, code, message, and evidence.
 - **Roslyn summary** — compiler-aware project/document/symbol counts (when workspace loads).
 - **Dependency injection summary** — DI registrations, constructor dependencies, and advisory findings.
-- **gpu-search findings** — pattern-based legacy signal results (when gpu-search-mcp is running).
+- **gpu-search signal scan** — when gpu-search-mcp is running, LegacyLens calls `POST /scan/signals` to retrieve categorized signals (Framework, Data, Quality, Architecture) in one request. Automatically falls back to individual hybrid search queries when `/scan/signals` is unavailable (older gpu-search-mcp versions) and adds an `Info` finding `gpu-search-scan-fallback`.
 - **Recommended next steps** — deterministic, derived from detected findings.
 - **LLM summary** — optional. Requires `useLlm: true` and a configured local LLM provider.
 
@@ -446,6 +446,6 @@ Clone the target, add its root to `AllowedRoots` in your `appsettings.Local.json
 | File discovery | High | Direct evidence — file exists on disk |
 | Roslyn workspace | High | Compiler-accurate when workspace loads |
 | DI static analysis | Medium | Advisory — not runtime container verification |
-| gpu-search results | Medium | Heuristic/retrieval-based, not compiler-verified |
+| gpu-search signal scan | Medium | Heuristic/retrieval-based, not compiler-verified. Uses `/scan/signals` when available, falls back to individual queries. |
 
 All enrichment sources are local and read-only. No files are modified.

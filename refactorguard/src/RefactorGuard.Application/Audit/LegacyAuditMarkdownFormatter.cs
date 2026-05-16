@@ -26,7 +26,7 @@ public sealed class LegacyAuditMarkdownFormatter : ILegacyAuditMarkdownFormatter
         AppendRiskFindings(sb, report.RiskFindings);
         AppendRoslynSummary(sb, report.RoslynSummary);
         AppendDependencyInjectionSummary(sb, report.DependencyInjectionSummary);
-        AppendGpuSearchSummary(sb, report.GpuSearchSummary);
+        AppendGpuSearchSection(sb, report.GpuSearchSummary);
         AppendRecommendedNextSteps(sb, report.RecommendedNextSteps);
 
         if (!string.IsNullOrWhiteSpace(report.LlmSummary))
@@ -205,9 +205,9 @@ public sealed class LegacyAuditMarkdownFormatter : ILegacyAuditMarkdownFormatter
         sb.AppendLine();
     }
 
-    private static void AppendGpuSearchSummary(StringBuilder sb, AuditGpuSearchSummary? gpuSearch)
+    private static void AppendGpuSearchSection(StringBuilder sb, AuditGpuSearchSummary? gpuSearch)
     {
-        sb.AppendLine("## gpu-search Findings");
+        sb.AppendLine("## gpu-search Signal Scan");
         sb.AppendLine();
 
         if (gpuSearch is null)
@@ -228,8 +228,37 @@ public sealed class LegacyAuditMarkdownFormatter : ILegacyAuditMarkdownFormatter
             return;
         }
 
-        sb.AppendLine($"- Queries run: {gpuSearch.QueriesRun}");
-        sb.AppendLine($"- Total results: {gpuSearch.TotalResults}");
+        if (gpuSearch.UsedSignalScan)
+        {
+            sb.AppendLine("**Mode:** Signal scan (`POST /scan/signals`)");
+
+            if (gpuSearch.SignalCategories is { Count: > 0 })
+                sb.AppendLine($"- Categories: {string.Join(", ", gpuSearch.SignalCategories)}");
+
+            sb.AppendLine($"- Signals scanned: {gpuSearch.QueriesRun}");
+            sb.AppendLine($"- Total matches: {gpuSearch.TotalResults}");
+
+            if (gpuSearch.ScanWarnings is { Count: > 0 })
+            {
+                foreach (var warning in gpuSearch.ScanWarnings)
+                    sb.AppendLine($"- ⚠ {warning}");
+            }
+
+            if (gpuSearch.ScanLimitations is { Count: > 0 })
+            {
+                sb.AppendLine();
+                sb.AppendLine("**Scan limitations:**");
+                foreach (var limitation in gpuSearch.ScanLimitations)
+                    sb.AppendLine($"- {limitation}");
+            }
+        }
+        else
+        {
+            sb.AppendLine("**Mode:** Individual queries (fallback)");
+            sb.AppendLine($"- Queries run: {gpuSearch.QueriesRun}");
+            sb.AppendLine($"- Total results: {gpuSearch.TotalResults}");
+        }
+
         sb.AppendLine();
 
         if (gpuSearch.Results.Count > 0)

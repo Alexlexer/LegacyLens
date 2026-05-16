@@ -233,6 +233,66 @@ public sealed class LegacyAuditOrchestratorTests : IDisposable
         Assert.NotEmpty(report.RecommendedNextSteps);
     }
 
+    [Fact]
+    public async Task AuditAsync_UsesSignalScan_WhenAvailable()
+    {
+        var gpuClient = new SignalScanGpuSearchClient();
+        var orchestrator = CreateOrchestrator(gpuClient, new NullLlmProvider());
+
+        var report = await orchestrator.AuditAsync(
+            new LegacyAuditRequest(_root, IncludeRoslyn: false, IncludeGpuSearch: true, IncludeDependencyInjection: false),
+            CancellationToken.None);
+
+        Assert.NotNull(report.GpuSearchSummary);
+        Assert.True(report.GpuSearchSummary.WasAvailable);
+        Assert.True(report.GpuSearchSummary.UsedSignalScan);
+        Assert.Equal(2, report.GpuSearchSummary.QueriesRun);
+        Assert.Contains(report.GpuSearchSummary.Results, r => r.Query == "System.Web");
+    }
+
+    [Fact]
+    public async Task AuditAsync_FallsBackToIndividualQueries_WhenSignalScanReturns404()
+    {
+        var orchestrator = CreateOrchestrator(new NullGpuSearchClient(), new NullLlmProvider());
+
+        var report = await orchestrator.AuditAsync(
+            new LegacyAuditRequest(_root, IncludeRoslyn: false, IncludeGpuSearch: true, IncludeDependencyInjection: false),
+            CancellationToken.None);
+
+        Assert.NotNull(report.GpuSearchSummary);
+        Assert.True(report.GpuSearchSummary.WasAvailable);
+        Assert.False(report.GpuSearchSummary.UsedSignalScan);
+        Assert.Contains(report.RiskFindings, f => f.Code == "gpu-search-scan-fallback");
+    }
+
+    [Fact]
+    public async Task AuditAsync_SignalScanResultsMappedToTechnologySignals()
+    {
+        var gpuClient = new SignalScanGpuSearchClient();
+        var orchestrator = CreateOrchestrator(gpuClient, new NullLlmProvider());
+
+        var report = await orchestrator.AuditAsync(
+            new LegacyAuditRequest(_root, IncludeRoslyn: false, IncludeGpuSearch: true, IncludeDependencyInjection: false),
+            CancellationToken.None);
+
+        Assert.Contains(report.TechnologySignals, s => s.Name == ".NET Framework / System.Web");
+        Assert.Contains(report.RiskFindings, f => f.Code == "legacy-framework-detected");
+    }
+
+    [Fact]
+    public async Task AuditAsync_SignalScanMarkdownContainsSignalScanSection()
+    {
+        var gpuClient = new SignalScanGpuSearchClient();
+        var orchestrator = CreateOrchestrator(gpuClient, new NullLlmProvider());
+
+        var report = await orchestrator.AuditAsync(
+            new LegacyAuditRequest(_root, IncludeRoslyn: false, IncludeGpuSearch: true, IncludeDependencyInjection: false),
+            CancellationToken.None);
+
+        Assert.Contains("## gpu-search Signal Scan", report.Markdown);
+        Assert.Contains("Signal scan", report.Markdown);
+    }
+
     private LegacyAuditOrchestrator CreateOrchestrator(
         IGpuSearchClient gpuSearchClient,
         IReviewLlmProvider llmProvider,
@@ -298,6 +358,32 @@ public sealed class LegacyAuditOrchestratorTests : IDisposable
         }
     }
 
+    private sealed class SignalScanGpuSearchClient : IGpuSearchClient
+    {
+        public Task<GpuSearchHealth> GetHealthAsync(CancellationToken cancellationToken) => Task.FromResult(new GpuSearchHealth("ok"));
+        public Task<GpuSearchStats> GetStatsAsync(CancellationToken cancellationToken) => Task.FromResult(new GpuSearchStats("ok", null, null, null));
+        public Task<IReadOnlyList<GpuSearchResult>> SearchCodeAsync(CodeSearchRequest request, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<GpuSearchResult>>([]);
+        public Task<IReadOnlyList<GpuSearchResult>> SearchSemanticAsync(CodeSearchRequest request, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<GpuSearchResult>>([]);
+        public Task<IReadOnlyList<GpuSearchResult>> SearchHybridAsync(SearchHybridRequest request, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<GpuSearchResult>>([]);
+        public Task<ReadBlockResponse> ReadBlockAsync(ReadBlockRequest request, CancellationToken cancellationToken) => Task.FromResult(new ReadBlockResponse("ok", string.Empty, null, null, null, null, null));
+        public Task<ReadSkeletonResponse> ReadSkeletonAsync(ReadSkeletonRequest request, CancellationToken cancellationToken) => Task.FromResult(new ReadSkeletonResponse("ok", string.Empty, null, null, null, null));
+        public Task<DependencyImpactResponse> GetDependencyImpactAsync(DependencyImpactRequest request, CancellationToken cancellationToken) => Task.FromResult(new DependencyImpactResponse("ok", string.Empty, null, []));
+
+        public Task<SignalScanResponse> ScanSignalsAsync(SignalScanRequest request, CancellationToken cancellationToken)
+        {
+            var signals = new List<RepositorySignal>
+            {
+                new("framework-system-web", "Framework", "System.Web", "Legacy System.Web reference", "high", "System.Web",
+                    [new SignalMatch("src/Startup.cs", null, 1, null, 0.9, null, "using System.Web;", "hybrid")]),
+                new("quality-sync-over-async", "Quality", ".Result usage", "Sync-over-async pattern", "medium", ".Result",
+                    [new SignalMatch("src/Service.cs", null, 5, null, 0.8, null, "var x = task.Result;", "hybrid")])
+            };
+            var summary = new SignalScanSummary(signals.Count, 2, ["Framework", "Quality"]);
+            var response = new SignalScanResponse("ok", ["Framework", "Quality"], summary, signals, null, null);
+            return Task.FromResult(response);
+        }
+    }
+
     private sealed class NullGpuSearchClient : IGpuSearchClient
     {
         public Task<GpuSearchHealth> GetHealthAsync(CancellationToken cancellationToken) => Task.FromResult(new GpuSearchHealth("ok"));
@@ -308,6 +394,7 @@ public sealed class LegacyAuditOrchestratorTests : IDisposable
         public Task<ReadBlockResponse> ReadBlockAsync(ReadBlockRequest request, CancellationToken cancellationToken) => Task.FromResult(new ReadBlockResponse("ok", string.Empty, null, null, null, null, null));
         public Task<ReadSkeletonResponse> ReadSkeletonAsync(ReadSkeletonRequest request, CancellationToken cancellationToken) => Task.FromResult(new ReadSkeletonResponse("ok", string.Empty, null, null, null, null));
         public Task<DependencyImpactResponse> GetDependencyImpactAsync(DependencyImpactRequest request, CancellationToken cancellationToken) => Task.FromResult(new DependencyImpactResponse("ok", string.Empty, null, []));
+        public Task<SignalScanResponse> ScanSignalsAsync(SignalScanRequest request, CancellationToken cancellationToken) => throw new HttpRequestException("Not found", null, System.Net.HttpStatusCode.NotFound);
     }
 
     private sealed class FailingGpuSearchClient : IGpuSearchClient
@@ -320,7 +407,7 @@ public sealed class LegacyAuditOrchestratorTests : IDisposable
         public Task<ReadBlockResponse> ReadBlockAsync(ReadBlockRequest request, CancellationToken cancellationToken) => throw new HttpRequestException("Connection refused");
         public Task<ReadSkeletonResponse> ReadSkeletonAsync(ReadSkeletonRequest request, CancellationToken cancellationToken) => throw new HttpRequestException("Connection refused");
         public Task<DependencyImpactResponse> GetDependencyImpactAsync(DependencyImpactRequest request, CancellationToken cancellationToken) => throw new HttpRequestException("Connection refused");
-
+        public Task<SignalScanResponse> ScanSignalsAsync(SignalScanRequest request, CancellationToken cancellationToken) => throw new HttpRequestException("Connection refused");
     }
 
     private sealed class NullLlmProvider : IReviewLlmProvider

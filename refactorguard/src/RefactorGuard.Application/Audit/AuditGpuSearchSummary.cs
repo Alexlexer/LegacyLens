@@ -11,4 +11,8 @@ public sealed record AuditGpuSearchSummary(
     int QueriesRun,
     int TotalResults,
     IReadOnlyList<AuditGpuSearchResult> Results,
-    string? ErrorMessage);
+    string? ErrorMessage,
+    bool UsedSignalScan = false,
+    IReadOnlyList<string>? SignalCategories = null,
+    IReadOnlyList<string>? ScanLimitations = null,
+    IReadOnlyList<string>? ScanWarnings = null);

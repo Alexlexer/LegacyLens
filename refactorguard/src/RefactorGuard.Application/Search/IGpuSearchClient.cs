@@ -31,4 +31,8 @@ public interface IGpuSearchClient
     Task<DependencyImpactResponse> GetDependencyImpactAsync(
         DependencyImpactRequest request,
         CancellationToken cancellationToken);
+
+    Task<SignalScanResponse> ScanSignalsAsync(
+        SignalScanRequest request,
+        CancellationToken cancellationToken);
 }

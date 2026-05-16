@@ -49,5 +49,8 @@ public sealed class DotNetAnalysisServiceTests
 
         public Task<DependencyImpactResponse> GetDependencyImpactAsync(DependencyImpactRequest request, CancellationToken cancellationToken)
             => Task.FromResult(new DependencyImpactResponse("ok", request.Path, null, []));
+
+        public Task<SignalScanResponse> ScanSignalsAsync(SignalScanRequest request, CancellationToken cancellationToken)
+            => throw new HttpRequestException("Not found", null, System.Net.HttpStatusCode.NotFound);
     }
 }

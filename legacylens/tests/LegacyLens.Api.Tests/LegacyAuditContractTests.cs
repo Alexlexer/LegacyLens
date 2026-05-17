@@ -96,7 +96,7 @@ public sealed class LegacyAuditContractTests
     {
         var match = new SignalMatch("src/App.cs", null, 10, null, 0.9, null, "using System.Web;", "hybrid");
         var signal = new RepositorySignal("fw-systemweb", "Framework", "System.Web", null, "high", "System.Web", [match]);
-        var scanSummary = new SignalScanSummary(1, 1, ["Framework"]);
+        var scanSummary = new SignalScanSummary(1, 1, new Dictionary<string, int> { ["Framework"] = 1 });
         var response = new SignalScanResponse("ok", ["Framework"], scanSummary, [signal], null, null);
 
         Assert.Equal("fw-systemweb", signal.Id);

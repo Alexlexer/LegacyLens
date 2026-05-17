@@ -12,8 +12,27 @@ public sealed class GpuSearchClient(HttpClient httpClient) : IGpuSearchClient
     public Task<GpuSearchHealth> GetHealthAsync(CancellationToken cancellationToken)
         => GetRequiredAsync<GpuSearchHealth>("/health", cancellationToken);
 
-    public Task<GpuSearchStats> GetStatsAsync(CancellationToken cancellationToken)
-        => GetRequiredAsync<GpuSearchStats>("/stats", cancellationToken);
+    public async Task<GpuSearchStats> GetStatsAsync(CancellationToken cancellationToken)
+    {
+        using var response = await httpClient.GetAsync("/stats", cancellationToken);
+        EnsureSuccess(response, "/stats");
+        var json = await response.Content.ReadAsStringAsync(cancellationToken);
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+
+        var status = ReadString(root, "status")
+            ?? ReadNestedString(root, "status", "pattern")
+            ?? "ok";
+        var backend = ReadString(root, "backend")
+            ?? ReadNestedString(root, "device", "backend");
+        var device = ReadString(root, "device")
+            ?? ReadNestedString(root, "device", "torchDevice")
+            ?? backend;
+        var indexedFileCount = ReadInt(root, "indexedFileCount")
+            ?? ReadNestedInt(root, "pattern", "files");
+
+        return new GpuSearchStats(status, backend, device, indexedFileCount);
+    }
 
     public Task<IReadOnlyList<GpuSearchResult>> SearchCodeAsync(
         CodeSearchRequest request,
@@ -118,6 +137,52 @@ public sealed class GpuSearchClient(HttpClient httpClient) : IGpuSearchClient
         EnsureSuccess(response, path);
         var result = await response.Content.ReadFromJsonAsync<T>(cancellationToken);
         return result ?? throw new InvalidOperationException($"gpu-search-mcp returned empty response for {path}.");
+    }
+
+    private static string? ReadString(JsonElement root, string propertyName)
+    {
+        if (!root.TryGetProperty(propertyName, out var value))
+            return null;
+
+        return value.ValueKind switch
+        {
+            JsonValueKind.String => value.GetString(),
+            JsonValueKind.Number => value.GetRawText(),
+            JsonValueKind.True => "true",
+            JsonValueKind.False => "false",
+            _ => null
+        };
+    }
+
+    private static string? ReadNestedString(JsonElement root, string objectName, string propertyName)
+    {
+        if (!root.TryGetProperty(objectName, out var obj) || obj.ValueKind != JsonValueKind.Object)
+            return null;
+
+        return ReadString(obj, propertyName);
+    }
+
+    private static int? ReadInt(JsonElement root, string propertyName)
+    {
+        if (!root.TryGetProperty(propertyName, out var value))
+            return null;
+
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number))
+            return number;
+
+        if (value.ValueKind == JsonValueKind.String &&
+            int.TryParse(value.GetString(), out var parsed))
+            return parsed;
+
+        return null;
+    }
+
+    private static int? ReadNestedInt(JsonElement root, string objectName, string propertyName)
+    {
+        if (!root.TryGetProperty(objectName, out var obj) || obj.ValueKind != JsonValueKind.Object)
+            return null;
+
+        return ReadInt(obj, propertyName);
     }
 }
 

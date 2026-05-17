@@ -38,6 +38,26 @@ public sealed class GpuSearchClientTests
         Assert.Equal(42, stats.IndexedFileCount);
     }
 
+
+    [Fact]
+    public async Task GetStatsAsync_ReturnsStatsFromStructuredGpuSearchResponse()
+    {
+        var client = CreateClient(new
+        {
+            pattern = new { files = 158, baseDir = "D:/Repo" },
+            dependency = new { files = 132, edges = 47 },
+            status = new { pattern = "done: 158 files", deps = "done: 132 files", semantic = "" },
+            device = new { backend = "cuda", torchDevice = "cuda", reason = "CUDA available" }
+        });
+        var gpuSearchClient = new GpuSearchClient(client);
+
+        var stats = await gpuSearchClient.GetStatsAsync(CancellationToken.None);
+
+        Assert.Equal("done: 158 files", stats.Status);
+        Assert.Equal("cuda", stats.Backend);
+        Assert.Equal("cuda", stats.Device);
+        Assert.Equal(158, stats.IndexedFileCount);
+    }
     [Fact]
     public async Task GetHealthAsync_ThrowsWhenServerReturnsFailure()
     {
@@ -403,4 +423,5 @@ public sealed class GpuSearchClientTests
         }
     }
 }
+
 

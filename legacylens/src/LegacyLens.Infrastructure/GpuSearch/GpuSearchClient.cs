@@ -12,8 +12,32 @@ public sealed class GpuSearchClient(HttpClient httpClient) : IGpuSearchClient
     public Task<GpuSearchHealth> GetHealthAsync(CancellationToken cancellationToken)
         => GetRequiredAsync<GpuSearchHealth>("/health", cancellationToken);
 
-    public Task<GpuSearchStats> GetStatsAsync(CancellationToken cancellationToken)
-        => GetRequiredAsync<GpuSearchStats>("/stats", cancellationToken);
+    public async Task<GpuSearchStats> GetStatsAsync(CancellationToken cancellationToken)
+    {
+        using var response = await httpClient.GetAsync("/stats", cancellationToken);
+        EnsureSuccess(response, "/stats");
+        var json = await response.Content.ReadAsStringAsync(cancellationToken);
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+
+        var status = root.TryGetProperty("status", out var statusEl) && statusEl.ValueKind == JsonValueKind.Object
+            ? (statusEl.TryGetProperty("pattern", out var p) ? p.GetString() : null)
+            : statusEl.ValueKind == JsonValueKind.String ? statusEl.GetString() : null;
+
+        string? backend = null;
+        string? device = null;
+        if (root.TryGetProperty("device", out var deviceEl) && deviceEl.ValueKind == JsonValueKind.Object)
+        {
+            backend = deviceEl.TryGetProperty("backend", out var b) ? b.GetString() : null;
+            device = deviceEl.TryGetProperty("torchDevice", out var d) ? d.GetString() : null;
+        }
+
+        int? indexedFileCount = null;
+        if (root.TryGetProperty("pattern", out var patternEl) && patternEl.ValueKind == JsonValueKind.Object)
+            indexedFileCount = patternEl.TryGetProperty("files", out var f) && f.TryGetInt32(out var n) ? n : null;
+
+        return new GpuSearchStats(status ?? "unknown", backend, device, indexedFileCount);
+    }
 
     public Task<IReadOnlyList<GpuSearchResult>> SearchCodeAsync(
         CodeSearchRequest request,
@@ -68,6 +92,16 @@ public sealed class GpuSearchClient(HttpClient httpClient) : IGpuSearchClient
         EnsureSuccess(response, "/scan/signals");
         return await response.Content.ReadFromJsonAsync<SignalScanResponse>(JsonOptions, cancellationToken)
             ?? throw new InvalidOperationException("gpu-search-mcp returned empty response for /scan/signals.");
+    }
+
+    public async Task<GpuSearchIndexRootResponse> IndexRootAsync(
+        GpuSearchIndexRootRequest request,
+        CancellationToken cancellationToken)
+    {
+        using var response = await httpClient.PostAsJsonAsync("/index/root", request, JsonOptions, cancellationToken);
+        EnsureSuccess(response, "/index/root");
+        return await response.Content.ReadFromJsonAsync<GpuSearchIndexRootResponse>(JsonOptions, cancellationToken)
+            ?? throw new InvalidOperationException("gpu-search-mcp returned empty response for /index/root.");
     }
 
     private async Task<IReadOnlyList<GpuSearchResult>> PostSearchAsync<TRequest>(

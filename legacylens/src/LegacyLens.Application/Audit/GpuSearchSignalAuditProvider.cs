@@ -76,6 +76,8 @@ public sealed class GpuSearchSignalAuditProvider(
             return new AuditGpuSearchSummary(false, 0, 0, [], ex.Message);
         }
 
+        await TryIndexRepoAsync(repoPath, findings, cancellationToken);
+
         try
         {
             var scanRequest = new SignalScanRequest(repoPath, TopKPerSignal: MaxGpuSearchResultsPerQuery, IncludeSnippets: true);
@@ -94,6 +96,36 @@ public sealed class GpuSearchSignalAuditProvider(
         }
 
         return await RunIndividualQueriesAsync(repoPath, signals, findings, cancellationToken);
+    }
+
+    private async Task TryIndexRepoAsync(
+        string repoPath,
+        List<AuditFinding> findings,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var indexResponse = await gpuSearchClient.IndexRootAsync(
+                new GpuSearchIndexRootRequest(repoPath),
+                cancellationToken);
+
+            if (!indexResponse.Ok)
+            {
+                findings.Add(new AuditFinding(
+                    "Info",
+                    "gpu-search-index-warning",
+                    "gpu-search repo index incomplete",
+                    indexResponse.Message ?? "gpu-search-mcp could not fully index the repository before signal scanning."));
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        {
+            findings.Add(new AuditFinding(
+                "Info",
+                "gpu-search-index-warning",
+                "gpu-search repo index skipped",
+                $"gpu-search-mcp /index/root was not available; signal scan may cover a different repository. ({ex.Message})"));
+        }
     }
 
     private static AuditGpuSearchSummary MapSignalScanResponse(

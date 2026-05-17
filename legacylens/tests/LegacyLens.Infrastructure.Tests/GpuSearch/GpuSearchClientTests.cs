@@ -23,16 +23,15 @@ public sealed class GpuSearchClientTests
     {
         var client = CreateClient(new
         {
-            status = "ok",
-            backend = "cuda",
-            device = "RTX 4060",
-            indexedFileCount = 42
+            status = new { pattern = "done: 42 files", deps = "done: 38 files", semantic = "" },
+            device = new { backend = "cuda", torchDevice = "RTX 4060", reason = "CUDA available" },
+            pattern = new { files = 42, vram_mb = 1.2 },
         });
         var gpuSearchClient = new GpuSearchClient(client);
 
         var stats = await gpuSearchClient.GetStatsAsync(CancellationToken.None);
 
-        Assert.Equal("ok", stats.Status);
+        Assert.Equal("done: 42 files", stats.Status);
         Assert.Equal("cuda", stats.Backend);
         Assert.Equal("RTX 4060", stats.Device);
         Assert.Equal(42, stats.IndexedFileCount);
@@ -324,6 +323,74 @@ public sealed class GpuSearchClientTests
         Assert.Null(impact.Limitations);
         Assert.Null(impact.Warnings);
         Assert.Single(impact.ImpactedFiles);
+    }
+
+    [Fact]
+    public async Task IndexRootAsync_ReturnsIndexResponse_WhenSuccessful()
+    {
+        var client = CreateClient(new
+        {
+            ok = true,
+            directory = "D:/Repos/BlogEngine.NET",
+            normalizedDirectory = "D:/Repos/BlogEngine.NET",
+            started = true,
+            completed = true,
+            pattern = new { ready = true, files = 1666, fromCache = false },
+            dependency = new { ready = true, files = 1342 },
+            message = "Indexed 1666 files"
+        });
+        var gpuSearchClient = new GpuSearchClient(client);
+
+        var result = await gpuSearchClient.IndexRootAsync(
+            new GpuSearchIndexRootRequest("D:/Repos/BlogEngine.NET"),
+            CancellationToken.None);
+
+        Assert.True(result.Ok);
+        Assert.Equal("D:/Repos/BlogEngine.NET", result.Directory);
+        Assert.True(result.Completed);
+        Assert.NotNull(result.Pattern);
+        Assert.True(result.Pattern!.Ready);
+        Assert.Equal(1666, result.Pattern.Files);
+        Assert.False(result.Pattern.FromCache);
+        Assert.NotNull(result.Dependency);
+        Assert.True(result.Dependency!.Ready);
+        Assert.Equal(1342, result.Dependency.Files);
+        Assert.Equal("Indexed 1666 files", result.Message);
+    }
+
+    [Fact]
+    public async Task IndexRootAsync_ThrowsHttpRequestException_OnServerError()
+    {
+        var client = CreateClient(new { error = "failed" }, HttpStatusCode.InternalServerError);
+        var gpuSearchClient = new GpuSearchClient(client);
+
+        await Assert.ThrowsAsync<HttpRequestException>(() =>
+            gpuSearchClient.IndexRootAsync(
+                new GpuSearchIndexRootRequest("D:/Repos/BlogEngine.NET"),
+                CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task IndexRootAsync_HandlesOkFalse_WithMessage()
+    {
+        var client = CreateClient(new
+        {
+            ok = false,
+            directory = "D:/Repos/Missing",
+            started = false,
+            completed = false,
+            message = "Directory not found"
+        });
+        var gpuSearchClient = new GpuSearchClient(client);
+
+        var result = await gpuSearchClient.IndexRootAsync(
+            new GpuSearchIndexRootRequest("D:/Repos/Missing"),
+            CancellationToken.None);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Completed);
+        Assert.Equal("Directory not found", result.Message);
+        Assert.Null(result.Pattern);
     }
 
     private static HttpClient CreateClient(object response, HttpStatusCode statusCode = HttpStatusCode.OK)

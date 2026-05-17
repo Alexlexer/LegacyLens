@@ -32,7 +32,17 @@ public interface IGpuSearchClient
         DependencyImpactRequest request,
         CancellationToken cancellationToken);
 
+    Task<GpuSearchIndexRootResponse> IndexRootAsync(
+        GpuSearchIndexRootRequest request,
+        CancellationToken cancellationToken)
+        => throw new HttpRequestException("gpu-search index root is not implemented by this client.", null, System.Net.HttpStatusCode.NotFound);
+
+    Task<GpuSearchIndexStatusResponse> GetIndexStatusAsync(
+        CancellationToken cancellationToken)
+        => throw new HttpRequestException("gpu-search index status is not implemented by this client.", null, System.Net.HttpStatusCode.NotFound);
+
     Task<SignalScanResponse> ScanSignalsAsync(
         SignalScanRequest request,
         CancellationToken cancellationToken);
 }
+

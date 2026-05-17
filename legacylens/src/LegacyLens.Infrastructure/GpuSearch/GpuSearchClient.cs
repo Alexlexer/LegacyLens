@@ -60,6 +60,19 @@ public sealed class GpuSearchClient(HttpClient httpClient) : IGpuSearchClient
             ?? throw new InvalidOperationException("gpu-search-mcp returned empty response for /dependency/impact.");
     }
 
+    public async Task<GpuSearchIndexRootResponse> IndexRootAsync(
+        GpuSearchIndexRootRequest request,
+        CancellationToken cancellationToken)
+    {
+        using var response = await httpClient.PostAsJsonAsync("/index/root", request, JsonOptions, cancellationToken);
+        EnsureSuccess(response, "/index/root");
+        return await response.Content.ReadFromJsonAsync<GpuSearchIndexRootResponse>(JsonOptions, cancellationToken)
+            ?? throw new InvalidOperationException("gpu-search-mcp returned empty response for /index/root.");
+    }
+
+    public Task<GpuSearchIndexStatusResponse> GetIndexStatusAsync(CancellationToken cancellationToken)
+        => GetRequiredAsync<GpuSearchIndexStatusResponse>("/index/status", cancellationToken);
+
     public async Task<SignalScanResponse> ScanSignalsAsync(
         SignalScanRequest request,
         CancellationToken cancellationToken)
@@ -107,3 +120,4 @@ public sealed class GpuSearchClient(HttpClient httpClient) : IGpuSearchClient
         return result ?? throw new InvalidOperationException($"gpu-search-mcp returned empty response for {path}.");
     }
 }
+

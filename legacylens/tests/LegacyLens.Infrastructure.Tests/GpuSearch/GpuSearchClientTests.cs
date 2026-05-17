@@ -326,6 +326,58 @@ public sealed class GpuSearchClientTests
         Assert.Single(impact.ImpactedFiles);
     }
 
+
+    [Fact]
+    public async Task GetIndexStatusAsync_ReturnsIndexStatusResponse()
+    {
+        var client = CreateClient(new
+        {
+            indexedRoots = new object[] { new { path = "D:/Repos/App" } },
+            pattern = new { ready = true, files = 12 },
+            dependency = new { ready = true },
+            semantic = new { ready = false },
+            status = "ok",
+            lastIndexResult = new { ok = true, normalizedDirectory = "D:/Repos/App" }
+        });
+        var gpuSearchClient = new GpuSearchClient(client);
+
+        var status = await gpuSearchClient.GetIndexStatusAsync(CancellationToken.None);
+
+        Assert.Single(status.IndexedRoots);
+        Assert.True(status.Pattern?.Ready);
+        Assert.Equal(12, status.Pattern?.Files);
+        Assert.Equal("ok", status.Status);
+        Assert.True(status.LastIndexResult?.Ok);
+    }
+
+    [Fact]
+    public async Task IndexRootAsync_ReturnsIndexRootResponse()
+    {
+        var client = CreateClient(new
+        {
+            ok = true,
+            directory = "D:/Repos/App",
+            normalizedDirectory = "D:/Repos/App",
+            started = true,
+            completed = true,
+            pattern = new { ready = true, files = 12, fromCache = false },
+            dependency = new { ready = true },
+            semantic = new { requested = false, ready = false },
+            message = "indexed"
+        });
+        var gpuSearchClient = new GpuSearchClient(client);
+
+        var result = await gpuSearchClient.IndexRootAsync(
+            new GpuSearchIndexRootRequest("D:/Repos/App"),
+            CancellationToken.None);
+
+        Assert.True(result.Ok);
+        Assert.True(result.Completed);
+        Assert.True(result.Pattern?.Ready);
+        Assert.Equal(12, result.Pattern?.Files);
+        Assert.False(result.Semantic?.Requested);
+        Assert.Equal("indexed", result.Message);
+    }
     private static HttpClient CreateClient(object response, HttpStatusCode statusCode = HttpStatusCode.OK)
     {
         return new HttpClient(new StubHandler(response, statusCode))
@@ -351,3 +403,4 @@ public sealed class GpuSearchClientTests
         }
     }
 }
+

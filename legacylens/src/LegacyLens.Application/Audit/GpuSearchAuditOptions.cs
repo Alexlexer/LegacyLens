@@ -1,16 +1,10 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace LegacyLens.Infrastructure.GpuSearch;
+namespace LegacyLens.Application.Audit;
 
-public sealed class GpuSearchOptions
+public sealed class GpuSearchAuditOptions
 {
     public const string SectionName = "RefactorGuard:GpuSearch";
-
-    [Required]
-    public Uri BaseUrl { get; init; } = new("http://127.0.0.1:8765");
-
-    [Range(1, 120)]
-    public int TimeoutSeconds { get; init; } = 10;
 
     public bool EnsureIndexedRootBeforeAudit { get; init; } = true;
 
@@ -21,4 +15,3 @@ public sealed class GpuSearchOptions
     [Range(1, 1800)]
     public int IndexRootTimeoutSeconds { get; init; } = 120;
 }
-

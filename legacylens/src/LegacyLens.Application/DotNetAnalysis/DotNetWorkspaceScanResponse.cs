@@ -7,4 +7,8 @@ public sealed record DotNetWorkspaceScanResponse(
     int DocumentCount,
     int SymbolCount,
     IReadOnlyList<DotNetSymbolInfo> Symbols,
-    RoslynWorkspaceLoadResult LoadResult);
+    RoslynWorkspaceLoadResult LoadResult)
+{
+    public IReadOnlyDictionary<string, int> SymbolKindCounts { get; init; } =
+        new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+}

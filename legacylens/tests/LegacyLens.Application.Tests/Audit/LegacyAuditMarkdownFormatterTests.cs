@@ -106,6 +106,24 @@ public sealed class LegacyAuditMarkdownFormatterTests
     }
 
     [Fact]
+    public void Format_IncludesSyntaxOnlyCounts_WhenWorkspaceNotLoadedButFallbackFoundSymbols()
+    {
+        var report = BuildMinimalReport() with
+        {
+            RoslynSummary = new AuditRoslynSummary(
+                false, "/workspace/App.sln", DotNetWorkspaceKind.Sln,
+                0, 25, 100, 30, 5, 60, ["Syntax-only fallback used."], "MSBuild failed.")
+        };
+
+        var markdown = new LegacyAuditMarkdownFormatter().Format(report);
+
+        Assert.Contains("Syntax-only C# fallback", markdown);
+        Assert.Contains("Documents scanned: 25", markdown);
+        Assert.Contains("Symbols: 100", markdown);
+        Assert.Contains("Classes: 30, Interfaces: 5, Methods: 60", markdown);
+    }
+
+    [Fact]
     public void Format_IncludesDiSummary()
     {
         var report = BuildMinimalReport() with

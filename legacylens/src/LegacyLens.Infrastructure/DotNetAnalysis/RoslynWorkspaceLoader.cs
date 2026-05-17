@@ -133,12 +133,13 @@ public sealed class RoslynWorkspaceLoader : IRoslynWorkspaceLoader
             if (MSBuildLocator.IsRegistered || !MSBuildLocator.CanRegister)
                 return;
 
-            // Prefer .NET SDK MSBuild: it uses BuildHost-netcore which has no .NET
-            // Framework assembly binding constraints. VS 2026+ MSBuild (v18.x) runs
-            // inside BuildHost-net472 and requires System.Collections.Immutable v10,
-            // but the BuildHost ships only v9 — causing XMakeElements TypeInitializationException.
+            // .NET SDK 9.x (MSBuild 17.x) is compatible with Roslyn 5.3.0's BuildHost
+            // which ships System.Collections.Immutable 9.0.0. SDK 10+ ships MSBuild 18.x
+            // which requires SCI 10.0.0.3 — loading it causes XMakeElements TypeInitializationException
+            // from both BuildHost-net472 (binding redirect caps at 9.x) and BuildHost-netcore
+            // (deps.json lists SCI 9.0.0 which can conflict). VS 2026's MSBuild is also 18.x.
             var sdkInstance = MSBuildLocator.QueryVisualStudioInstances()
-                .Where(vs => vs.DiscoveryType == DiscoveryType.DotNetSdk)
+                .Where(vs => vs.DiscoveryType == DiscoveryType.DotNetSdk && vs.Version.Major < 10)
                 .OrderByDescending(vs => vs.Version)
                 .FirstOrDefault();
 

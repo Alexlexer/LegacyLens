@@ -21,6 +21,41 @@ public sealed class RoslynAuditProvider(
 
             if (!loadResult.Success)
             {
+                if (scanResponse.SymbolCount > 0)
+                {
+                    var fallbackClassCount = GetSymbolKindCount(scanResponse, "class");
+                    var fallbackInterfaceCount = GetSymbolKindCount(scanResponse, "interface");
+                    var fallbackMethodCount = GetSymbolKindCount(scanResponse, "method");
+                    var fallbackWarnings = loadResult.Warnings
+                        .Concat(scanResponse.Warnings)
+                        .Distinct()
+                        .ToList();
+
+                    return new AuditProviderResult(
+                        Name,
+                        RiskFindings:
+                        [
+                            new AuditFinding(
+                                "Info",
+                                "roslyn-syntax-fallback",
+                                "Roslyn workspace unavailable; syntax-only fallback used",
+                                "MSBuildWorkspace could not load the solution, so LegacyLens counted C# symbols directly from source files. Reference analysis and compiler-aware facts remain unavailable.",
+                                Evidence: loadResult.ErrorMessage)
+                        ],
+                        RoslynSummary: new AuditRoslynSummary(
+                            false,
+                            loadResult.WorkspacePath,
+                            loadResult.WorkspaceKind,
+                            loadResult.ProjectCount,
+                            scanResponse.DocumentCount,
+                            scanResponse.SymbolCount,
+                            fallbackClassCount,
+                            fallbackInterfaceCount,
+                            fallbackMethodCount,
+                            fallbackWarnings,
+                            loadResult.ErrorMessage));
+                }
+
                 return new AuditProviderResult(
                     Name,
                     RiskFindings:
@@ -41,9 +76,9 @@ public sealed class RoslynAuditProvider(
                         loadResult.ErrorMessage));
             }
 
-            var classCount = scanResponse.Symbols.Count(s => s.Kind == "class");
-            var interfaceCount = scanResponse.Symbols.Count(s => s.Kind == "interface");
-            var methodCount = scanResponse.Symbols.Count(s => s.Kind == "method");
+            var classCount = GetSymbolKindCount(scanResponse, "class");
+            var interfaceCount = GetSymbolKindCount(scanResponse, "interface");
+            var methodCount = GetSymbolKindCount(scanResponse, "method");
 
             return new AuditProviderResult(
                 Name,
@@ -76,5 +111,13 @@ public sealed class RoslynAuditProvider(
                 RoslynSummary: new AuditRoslynSummary(
                     false, null, null, 0, 0, 0, 0, 0, 0, [], ex.Message));
         }
+    }
+
+    private static int GetSymbolKindCount(DotNetWorkspaceScanResponse scanResponse, string kind)
+    {
+        if (scanResponse.SymbolKindCounts.TryGetValue(kind, out var count))
+            return count;
+
+        return scanResponse.Symbols.Count(s => string.Equals(s.Kind, kind, StringComparison.OrdinalIgnoreCase));
     }
 }

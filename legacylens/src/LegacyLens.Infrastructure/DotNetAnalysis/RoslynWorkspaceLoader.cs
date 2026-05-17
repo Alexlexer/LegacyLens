@@ -147,7 +147,8 @@ public sealed class RoslynWorkspaceLoader : IRoslynWorkspaceLoader
 
             var visualStudioInstance = MSBuildLocator.QueryVisualStudioInstances()
                 .Where(IsVisualStudioInstance)
-                .OrderByDescending(instance => instance.Version)
+                .OrderByDescending(GetVisualStudioInstancePreference)
+                .ThenByDescending(instance => instance.Version)
                 .FirstOrDefault();
 
             if (visualStudioInstance is not null)
@@ -191,7 +192,11 @@ public sealed class RoslynWorkspaceLoader : IRoslynWorkspaceLoader
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86)
         };
-        var versions = new[] { "18", "2026", "2022", "2019" };
+        // Prefer stable Visual Studio/MSBuild installs before preview/future toolsets.
+        // LegacyLens references MSBuild 17.x assemblies; registering VS 18/2026 first
+        // can make Roslyn's remote MSBuild host fail during static initialization
+        // (for example Microsoft.Build.Shared.XMakeElements) on legacy solutions.
+        var versions = new[] { "2022", "2019", "2017", "18", "2026" };
         var editions = new[] { "Enterprise", "Professional", "Community", "BuildTools" };
 
         foreach (var root in roots.Where(root => !string.IsNullOrWhiteSpace(root)).Distinct(StringComparer.OrdinalIgnoreCase))
@@ -209,12 +214,42 @@ public sealed class RoslynWorkspaceLoader : IRoslynWorkspaceLoader
                         "Current",
                         "Bin");
                     if (Directory.Exists(candidate))
-                        return candidate;
+                        return PreferProcessArchitectureMSBuildPath(candidate);
                 }
             }
         }
 
         return null;
+    }
+
+    private static string PreferProcessArchitectureMSBuildPath(string msbuildBinPath)
+    {
+        var architectureSubdirectory = Environment.Is64BitProcess ? "amd64" : "x86";
+        var architecturePath = Path.Combine(msbuildBinPath, architectureSubdirectory);
+        return Directory.Exists(architecturePath) ? architecturePath : msbuildBinPath;
+    }
+
+    internal static int GetVisualStudioInstancePreference(VisualStudioInstance instance)
+        => GetVisualStudioVersionPreference(instance.Version);
+
+    internal static int GetVisualStudioVersionPreference(Version version)
+    {
+        // Visual Studio 2022 / MSBuild 17.x is the safest match for the explicit
+        // Microsoft.Build.Framework 17.x reference used by this project.
+        if (version.Major == 17)
+            return 400;
+
+        if (version.Major == 16)
+            return 300;
+
+        if (version.Major == 15)
+            return 200;
+
+        // Future/preview instances are a fallback, not the first choice.
+        if (version.Major >= 18)
+            return 100;
+
+        return 0;
     }
 
     public sealed record LoadedRoslynWorkspace(

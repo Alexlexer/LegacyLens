@@ -149,12 +149,24 @@ public sealed class LegacyAuditMarkdownFormatter : ILegacyAuditMarkdownFormatter
         if (!roslyn.WorkspaceLoaded)
         {
             sb.AppendLine("Roslyn workspace could not be loaded.");
+            if (roslyn.SymbolCount > 0)
+                sb.AppendLine("Syntax-only C# fallback was used for symbol counts. Compiler-aware references remain unavailable.");
 
             if (!string.IsNullOrWhiteSpace(roslyn.ErrorMessage))
                 sb.AppendLine($"**Error:** {roslyn.ErrorMessage}");
 
             foreach (var warning in roslyn.Warnings)
                 sb.AppendLine($"- ⚠ {warning}");
+
+            if (roslyn.SymbolCount > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine($"- **Workspace:** `{roslyn.WorkspacePath}` ({roslyn.WorkspaceKind})");
+                sb.AppendLine($"- Projects: {roslyn.ProjectCount}");
+                sb.AppendLine($"- Documents scanned: {roslyn.DocumentCount}");
+                sb.AppendLine($"- Symbols: {roslyn.SymbolCount}");
+                sb.AppendLine($"- Classes: {roslyn.ClassCount}, Interfaces: {roslyn.InterfaceCount}, Methods: {roslyn.MethodCount}");
+            }
 
             sb.AppendLine();
             return;

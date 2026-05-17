@@ -325,3 +325,20 @@ ollama pull gemma3:4b
 Or use the UI **Ollama model** panel to check `/api/tags` status and explicitly pull the configured model through Ollama's local `/api/pull` endpoint. `AutoPullModel` defaults to `false` to avoid surprise multi-GB downloads. Deterministic mode works without Ollama.
 
 Prompts may contain diffs and code snippets, so use a trusted local/private Ollama instance. Ollama works well with an RTX GPU when configured to use it.
+
+### gpu-search audit indexing
+
+Before Legacy Audit calls `POST /scan/signals`, LegacyLens checks `GET /index/status` and ensures the selected repository is indexed. If the selected repo is missing or the pattern index is not ready, LegacyLens calls `POST /index/root` with the audit repo path. A parent indexed root is accepted, which supports intentionally indexing a workspace folder that contains multiple repos.
+
+Config under `LegacyLens:GpuSearch`:
+
+```json
+{
+  "EnsureIndexedRootBeforeAudit": true,
+  "RebuildCacheOnAudit": false,
+  "IncludeSemanticIndexOnAudit": false,
+  "IndexRootTimeoutSeconds": 120
+}
+```
+
+If gpu-search-mcp is unreachable or indexing fails, the audit still completes with deterministic/Roslyn/DI findings and adds a clear `Info` finding. Older gpu-search-mcp versions without `/index/root` continue to use the old scan/query behavior with a warning.

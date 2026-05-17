@@ -257,3 +257,9 @@ POST /api/llm/ollama/pull
 ```
 
 Pulls are explicit by default. `AutoPullModel=false` avoids surprise multi-GB downloads; set it to `true` only if you want LegacyLens to pull a missing configured model before an Ollama chat call.
+
+### Legacy Audit gpu-search indexing
+
+Legacy Audit no longer assumes gpu-search-mcp was started with the correct `--directory`. When `IncludeGpuSearch` is enabled, LegacyLens checks `GET /index/status` and, by default, asks gpu-search-mcp to index the selected repository with `POST /index/root` before running `POST /scan/signals`. This is read-only and does not modify the analyzed repository.
+
+`LegacyLens:GpuSearch` options: `EnsureIndexedRootBeforeAudit` (default `true`), `RebuildCacheOnAudit` (default `false`), `IncludeSemanticIndexOnAudit` (default `false`), and `IndexRootTimeoutSeconds` (default `120`). Lower compatibility path: if `/index/root` is unavailable, LegacyLens adds a warning and continues with the older scan/query behavior.

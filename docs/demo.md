@@ -460,3 +460,9 @@ Clone the target, add its root to `AllowedRoots` in your `appsettings.Local.json
 | gpu-search signal scan | Medium | Heuristic/retrieval-based, not compiler-verified. Uses `/scan/signals` when available, falls back to individual queries. |
 
 All enrichment sources are local and read-only. No files are modified.
+
+### gpu-search indexing during audit
+
+For Legacy Audit, select the repo path in the UI and run the audit. LegacyLens checks `GET /index/status`; if gpu-search-mcp is running but has no matching indexed root, it calls `POST /index/root` for the selected repository before `POST /scan/signals`. Reports show whether the selected repo was indexed, whether indexing failed, or whether signal scan was skipped because the pattern index was not ready.
+
+If indexing fails, the demo still produces a deterministic/Roslyn report with an `Info` finding instead of failing the whole audit.

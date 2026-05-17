@@ -1,14 +1,17 @@
 using System.Net;
+using System.Text.Json;
 using LegacyLens.Application.Search;
 using LegacyLens.Domain.Search;
 
 namespace LegacyLens.Application.Audit;
 
 public sealed class GpuSearchSignalAuditProvider(
-    IGpuSearchClient gpuSearchClient) : IAuditProvider
+    IGpuSearchClient gpuSearchClient,
+    GpuSearchAuditOptions? options = null) : IAuditProvider
 {
     private const int MaxGpuSearchResultsPerQuery = 5;
     private const int MaxTotalGpuSearchResults = 50;
+    private readonly GpuSearchAuditOptions _options = options ?? new GpuSearchAuditOptions();
 
     private static readonly IReadOnlyList<string> GpuSearchAuditQueries =
     [
@@ -30,6 +33,8 @@ public sealed class GpuSearchSignalAuditProvider(
         "AddScoped",
         "AddTransient"
     ];
+
+    public string Name => "GpuSearchSignal";
 
     public async Task<AuditProviderResult> AnalyzeAsync(
         AuditContext context,
@@ -53,8 +58,6 @@ public sealed class GpuSearchSignalAuditProvider(
             GpuSearchSummary: summary);
     }
 
-    public string Name => "GpuSearchSignal";
-
     private async Task<AuditGpuSearchSummary> TryBuildGpuSearchSummaryAsync(
         string repoPath,
         List<TechnologySignal> signals,
@@ -65,22 +68,39 @@ public sealed class GpuSearchSignalAuditProvider(
         {
             await gpuSearchClient.GetHealthAsync(cancellationToken);
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException or NotSupportedException)
         {
             findings.Add(new AuditFinding(
                 "Info",
                 "gpu-search-unavailable",
                 "gpu-search-mcp unavailable",
-                "gpu-search-mcp was not reachable. Pattern-based audit signals were skipped."));
+                "gpu-search-mcp is not reachable. Pattern-based audit signals were skipped."));
 
-            return new AuditGpuSearchSummary(false, 0, 0, [], ex.Message);
+            return new AuditGpuSearchSummary(false, 0, 0, [], ex.Message, IndexStatus: "unreachable");
+        }
+
+        var indexReadiness = await EnsureSelectedRootIndexedAsync(repoPath, findings, cancellationToken);
+
+        if (!indexReadiness.CanScan)
+        {
+            return new AuditGpuSearchSummary(
+                true,
+                0,
+                0,
+                [],
+                indexReadiness.Message,
+                UsedSignalScan: true,
+                ScanWarnings: indexReadiness.Message is null ? null : [indexReadiness.Message],
+                IndexStatus: indexReadiness.Status,
+                IndexedRoot: indexReadiness.IndexedRoot,
+                IndexMessage: indexReadiness.Message);
         }
 
         try
         {
             var scanRequest = new SignalScanRequest(repoPath, TopKPerSignal: MaxGpuSearchResultsPerQuery, IncludeSnippets: true);
             var scanResponse = await gpuSearchClient.ScanSignalsAsync(scanRequest, cancellationToken);
-            return MapSignalScanResponse(scanResponse, signals, findings);
+            return MapSignalScanResponse(scanResponse, signals, findings, indexReadiness);
         }
         catch (HttpRequestException ex) when (
             ex.StatusCode == HttpStatusCode.NotFound ||
@@ -93,13 +113,126 @@ public sealed class GpuSearchSignalAuditProvider(
                 "gpu-search-mcp /scan/signals is unavailable; fell back to individual search queries."));
         }
 
-        return await RunIndividualQueriesAsync(repoPath, signals, findings, cancellationToken);
+        return await RunIndividualQueriesAsync(repoPath, signals, findings, indexReadiness, cancellationToken);
+    }
+
+    private async Task<GpuSearchIndexReadiness> EnsureSelectedRootIndexedAsync(
+        string repoPath,
+        List<AuditFinding> findings,
+        CancellationToken cancellationToken)
+    {
+        GpuSearchIndexStatusResponse? status;
+        try
+        {
+            status = await gpuSearchClient.GetIndexStatusAsync(cancellationToken);
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed)
+        {
+            var message = $"gpu-search-mcp is reachable but does not support HTTP indexing. Start it with --directory {repoPath} or upgrade gpu-search-mcp.";
+            findings.Add(new AuditFinding(
+                "Info",
+                "gpu-search-http-indexing-unsupported",
+                "gpu-search HTTP indexing unsupported",
+                message));
+            return new GpuSearchIndexReadiness(true, "index-api-unsupported", null, message);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException or NotSupportedException)
+        {
+            findings.Add(new AuditFinding(
+                "Info",
+                "gpu-search-index-status-failed",
+                "gpu-search index status unavailable",
+                $"gpu-search-mcp index status could not be read. Signal scan was skipped. {ex.Message}"));
+            return new GpuSearchIndexReadiness(false, "status-unavailable", null, ex.Message);
+        }
+
+        var matchedRoot = FindMatchingIndexedRoot(status, repoPath);
+        if (matchedRoot is not null && status.Pattern?.Ready == true)
+            return new GpuSearchIndexReadiness(true, "indexed selected repository", matchedRoot, null);
+
+        if (!_options.EnsureIndexedRootBeforeAudit)
+        {
+            var message = "gpu-search pattern index is not ready for the selected repository and automatic audit indexing is disabled.";
+            findings.Add(new AuditFinding(
+                "Info",
+                "gpu-search-index-not-ready",
+                "gpu-search index not ready",
+                message));
+            return new GpuSearchIndexReadiness(false, "not indexed", matchedRoot, message);
+        }
+
+        GpuSearchIndexRootResponse indexResponse;
+        try
+        {
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(_options.IndexRootTimeoutSeconds));
+            indexResponse = await gpuSearchClient.IndexRootAsync(
+                new GpuSearchIndexRootRequest(
+                    repoPath,
+                    _options.RebuildCacheOnAudit,
+                    _options.IncludeSemanticIndexOnAudit),
+                timeoutCts.Token);
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed)
+        {
+            var message = $"gpu-search-mcp is reachable but does not support HTTP indexing. Start it with --directory {repoPath} or upgrade gpu-search-mcp.";
+            findings.Add(new AuditFinding(
+                "Info",
+                "gpu-search-http-indexing-unsupported",
+                "gpu-search HTTP indexing unsupported",
+                message));
+            return new GpuSearchIndexReadiness(true, "index-api-unsupported", matchedRoot, message);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException or NotSupportedException)
+        {
+            var message = $"gpu-search indexing failed: {ex.Message}";
+            findings.Add(new AuditFinding(
+                "Info",
+                "gpu-search-indexing-failed",
+                "gpu-search indexing failed",
+                message));
+            return new GpuSearchIndexReadiness(false, "indexing failed", matchedRoot, message);
+        }
+
+        if (!indexResponse.Ok || indexResponse.Pattern?.Ready != true)
+        {
+            var message = indexResponse.Error ?? indexResponse.Message ?? "gpu-search indexing completed but the pattern index is not ready.";
+            findings.Add(new AuditFinding(
+                "Info",
+                "gpu-search-indexing-failed",
+                "gpu-search indexing failed",
+                message));
+            return new GpuSearchIndexReadiness(false, "indexing failed", indexResponse.NormalizedDirectory ?? indexResponse.Directory ?? matchedRoot, message);
+        }
+
+        try
+        {
+            status = await gpuSearchClient.GetIndexStatusAsync(cancellationToken);
+            matchedRoot = FindMatchingIndexedRoot(status, repoPath) ?? indexResponse.NormalizedDirectory ?? indexResponse.Directory;
+            if (status.Pattern?.Ready != true)
+            {
+                var message = "gpu-search indexing completed, but pattern index status is not ready.";
+                findings.Add(new AuditFinding(
+                    "Info",
+                    "gpu-search-index-not-ready",
+                    "gpu-search index not ready",
+                    message));
+                return new GpuSearchIndexReadiness(false, "pattern not ready", matchedRoot, message);
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException or NotSupportedException)
+        {
+            matchedRoot = indexResponse.NormalizedDirectory ?? indexResponse.Directory ?? matchedRoot;
+        }
+
+        return new GpuSearchIndexReadiness(true, "indexed selected repository", matchedRoot, indexResponse.Message);
     }
 
     private static AuditGpuSearchSummary MapSignalScanResponse(
         SignalScanResponse scan,
         List<TechnologySignal> signals,
-        List<AuditFinding> findings)
+        List<AuditFinding> findings,
+        GpuSearchIndexReadiness indexReadiness)
     {
         var results = new List<AuditGpuSearchResult>();
 
@@ -130,7 +263,10 @@ public sealed class GpuSearchSignalAuditProvider(
             UsedSignalScan: true,
             SignalCategories: scan.Categories,
             ScanLimitations: scan.Limitations,
-            ScanWarnings: scan.Warnings);
+            ScanWarnings: scan.Warnings,
+            IndexStatus: indexReadiness.Status,
+            IndexedRoot: indexReadiness.IndexedRoot,
+            IndexMessage: indexReadiness.Message);
     }
 
     private static void CollectSignalScanSignals(
@@ -242,6 +378,7 @@ public sealed class GpuSearchSignalAuditProvider(
         string repoPath,
         List<TechnologySignal> signals,
         List<AuditFinding> findings,
+        GpuSearchIndexReadiness indexReadiness,
         CancellationToken cancellationToken)
     {
         var allResults = new List<AuditGpuSearchResult>();
@@ -282,7 +419,15 @@ public sealed class GpuSearchSignalAuditProvider(
             }
         }
 
-        return new AuditGpuSearchSummary(true, queriesRun, allResults.Count, allResults, null);
+        return new AuditGpuSearchSummary(
+            true,
+            queriesRun,
+            allResults.Count,
+            allResults,
+            null,
+            IndexStatus: indexReadiness.Status,
+            IndexedRoot: indexReadiness.IndexedRoot,
+            IndexMessage: indexReadiness.Message);
     }
 
     private static void CollectGpuSearchSignals(
@@ -320,6 +465,71 @@ public sealed class GpuSearchSignalAuditProvider(
         }
     }
 
+    private static string? FindMatchingIndexedRoot(GpuSearchIndexStatusResponse status, string repoPath)
+    {
+        var normalizedRepo = NormalizePath(repoPath);
+        if (normalizedRepo is null)
+            return null;
+
+        foreach (var root in status.IndexedRoots)
+        {
+            var rootPath = ExtractIndexedRootPath(root);
+            var normalizedRoot = NormalizePath(rootPath);
+            if (normalizedRoot is null)
+                continue;
+
+            if (PathsMatchOrRootContainsRepo(normalizedRoot, normalizedRepo))
+                return rootPath;
+        }
+
+        return null;
+    }
+
+    private static string? ExtractIndexedRootPath(JsonElement root)
+    {
+        return root.ValueKind switch
+        {
+            JsonValueKind.String => root.GetString(),
+            JsonValueKind.Object when root.TryGetProperty("path", out var path) && path.ValueKind == JsonValueKind.String => path.GetString(),
+            JsonValueKind.Object when root.TryGetProperty("directory", out var directory) && directory.ValueKind == JsonValueKind.String => directory.GetString(),
+            _ => null
+        };
+    }
+
+    private static bool PathsMatchOrRootContainsRepo(string indexedRoot, string repoPath)
+    {
+        var comparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        if (string.Equals(indexedRoot, repoPath, comparison))
+            return true;
+
+        var rootWithSeparator = indexedRoot.EndsWith(Path.DirectorySeparatorChar)
+            ? indexedRoot
+            : indexedRoot + Path.DirectorySeparatorChar;
+        return repoPath.StartsWith(rootWithSeparator, comparison);
+    }
+
+    private static string? NormalizePath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return null;
+
+        try
+        {
+            return Path.GetFullPath(path)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                .Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+        }
+        catch
+        {
+            return path.Trim()
+                .TrimEnd('/', '\\')
+                .Replace('/', Path.DirectorySeparatorChar)
+                .Replace('\\', Path.DirectorySeparatorChar);
+        }
+    }
+
     private static string? Truncate(string? value, int maxLength)
     {
         if (string.IsNullOrEmpty(value) || value.Length <= maxLength)
@@ -327,4 +537,12 @@ public sealed class GpuSearchSignalAuditProvider(
 
         return string.Concat(value.AsSpan(0, maxLength), "...");
     }
+
+    private sealed record GpuSearchIndexReadiness(
+        bool CanScan,
+        string Status,
+        string? IndexedRoot,
+        string? Message);
 }
+
+

@@ -228,6 +228,15 @@ public sealed class LegacyAuditMarkdownFormatter : ILegacyAuditMarkdownFormatter
             return;
         }
 
+        if (!string.IsNullOrWhiteSpace(gpuSearch.IndexStatus))
+            sb.AppendLine($"- Index status: {gpuSearch.IndexStatus}");
+
+        if (!string.IsNullOrWhiteSpace(gpuSearch.IndexedRoot))
+            sb.AppendLine($"- Indexed root: `{gpuSearch.IndexedRoot}`");
+
+        if (!string.IsNullOrWhiteSpace(gpuSearch.IndexMessage))
+            sb.AppendLine($"- Index message: {gpuSearch.IndexMessage}");
+
         if (gpuSearch.UsedSignalScan)
         {
             sb.AppendLine("**Mode:** Signal scan (`POST /scan/signals`)");
@@ -314,3 +323,5 @@ public sealed class LegacyAuditMarkdownFormatter : ILegacyAuditMarkdownFormatter
         sb.AppendLine();
     }
 }
+
+

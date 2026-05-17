@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using LegacyLens.Application.Audit;
 using LegacyLens.Application.DotNetAnalysis;
 using LegacyLens.Application.Git;
 using LegacyLens.Application.Review;
@@ -42,13 +43,20 @@ public static class DependencyInjection
             .ValidateDataAnnotations()
             .Validate(options => options.BaseUrl.IsAbsoluteUri, "GpuSearch BaseUrl must be absolute.")
             .ValidateOnStart();
+        services.AddOptions<GpuSearchAuditOptions>()
+            .Bind(Prefer(configuration, "LegacyLens:GpuSearch", GpuSearchAuditOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+        services.AddSingleton(serviceProvider => serviceProvider
+            .GetRequiredService<Microsoft.Extensions.Options.IOptions<GpuSearchAuditOptions>>()
+            .Value);
         services.AddHttpClient<IGpuSearchClient, GpuSearchClient>((serviceProvider, client) =>
         {
             var options = serviceProvider
                 .GetRequiredService<Microsoft.Extensions.Options.IOptions<GpuSearchOptions>>()
                 .Value;
             client.BaseAddress = options.BaseUrl;
-            client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
+            client.Timeout = TimeSpan.FromSeconds(Math.Max(options.TimeoutSeconds, options.IndexRootTimeoutSeconds));
         });
         services.AddOptions<LlmProviderOptions>()
             .Bind(Prefer(configuration, "LegacyLens:Review", LlmProviderOptions.SectionName))
@@ -120,3 +128,7 @@ public static class DependencyInjection
         return preferred.Exists() ? preferred : configuration.GetSection(fallbackKey);
     }
 }
+
+
+
+

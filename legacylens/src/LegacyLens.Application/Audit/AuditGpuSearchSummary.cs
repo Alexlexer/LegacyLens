@@ -15,4 +15,7 @@ public sealed record AuditGpuSearchSummary(
     bool UsedSignalScan = false,
     IReadOnlyList<string>? SignalCategories = null,
     IReadOnlyList<string>? ScanLimitations = null,
-    IReadOnlyList<string>? ScanWarnings = null);
+    IReadOnlyList<string>? ScanWarnings = null,
+    string? IndexStatus = null,
+    string? IndexedRoot = null,
+    string? IndexMessage = null);

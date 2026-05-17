@@ -197,6 +197,30 @@ public sealed class LegacyAuditMarkdownFormatterTests
         Assert.Contains("Queries run: 17", markdown);
     }
 
+
+    [Fact]
+    public void Format_IncludesGpuSearchIndexStatus_WhenPresent()
+    {
+        var report = BuildMinimalReport() with
+        {
+            GpuSearchSummary = new AuditGpuSearchSummary(
+                true,
+                2,
+                4,
+                [],
+                null,
+                UsedSignalScan: true,
+                IndexStatus: "indexed selected repository",
+                IndexedRoot: "D:/Repos/App",
+                IndexMessage: "indexed")
+        };
+
+        var markdown = new LegacyAuditMarkdownFormatter().Format(report);
+
+        Assert.Contains("Index status: indexed selected repository", markdown);
+        Assert.Contains("Indexed root: `D:/Repos/App`", markdown);
+        Assert.Contains("Index message: indexed", markdown);
+    }
     [Fact]
     public void Format_OmitsRoslynSection_WhenNotRequested()
     {
@@ -275,3 +299,4 @@ public sealed class LegacyAuditMarkdownFormatterTests
             string.Empty);
     }
 }
+

@@ -445,7 +445,7 @@ public sealed class LegacyAuditOrchestratorTests : IDisposable
                 new("quality-sync-over-async", "Quality", ".Result usage", "Sync-over-async pattern", "medium", ".Result",
                     [new SignalMatch("src/Service.cs", null, 5, null, 0.8, null, "var x = task.Result;", "hybrid")])
             };
-            var summary = new SignalScanSummary(signals.Count, 2, ["Framework", "Quality"]);
+            var summary = new SignalScanSummary(signals.Count, 2, new Dictionary<string, int> { ["Framework"] = 1, ["Quality"] = 1 });
             var response = new SignalScanResponse("ok", ["Framework", "Quality"], summary, signals, null, null);
             return Task.FromResult(response);
         }

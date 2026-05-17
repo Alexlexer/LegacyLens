@@ -14,6 +14,10 @@ using LegacyLens.Infrastructure.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// appsettings.Local.json is git-ignored and holds machine-specific overrides
+// (AllowedRoots, GpuSearch BaseUrl, Ollama model, etc.).
+builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
+
 builder.Services.AddLegacyLensApplication();
 builder.Services.AddLegacyLensInfrastructure(builder.Configuration);
 

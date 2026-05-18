@@ -133,11 +133,53 @@ public sealed class RoslynWorkspaceLoader : IRoslynWorkspaceLoader
             if (MSBuildLocator.IsRegistered || !MSBuildLocator.CanRegister)
                 return;
 
-            // .NET SDK 9.x (MSBuild 17.x) is compatible with Roslyn 5.3.0's BuildHost
-            // which ships System.Collections.Immutable 9.0.0. SDK 10+ ships MSBuild 18.x
-            // which requires SCI 10.0.0.3 — loading it causes XMakeElements TypeInitializationException
-            // from both BuildHost-net472 (binding redirect caps at 9.x) and BuildHost-netcore
-            // (deps.json lists SCI 9.0.0 which can conflict). VS 2026's MSBuild is also 18.x.
+            // Prefer a VS installation: it ships .NET Framework MSBuild which the
+            // BuildHost-net472 (required for .NET Framework solutions) can load.
+            // MSBuildLocator 1.11.2's QueryVisualStudioInstances() may not recognize VS 2026
+            // (DiscoveryType.VisualStudioSetup returns nothing), so we probe known paths first.
+            var knownVsMSBuildPaths = new[]
+            {
+                @"C:\Program Files\Microsoft Visual Studio\18\Enterprise\MSBuild\Current\Bin",
+                @"C:\Program Files\Microsoft Visual Studio\18\Professional\MSBuild\Current\Bin",
+                @"C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin",
+                @"C:\Program Files\Microsoft Visual Studio\17\Enterprise\MSBuild\Current\Bin",
+                @"C:\Program Files\Microsoft Visual Studio\17\Professional\MSBuild\Current\Bin",
+                @"C:\Program Files\Microsoft Visual Studio\17\Community\MSBuild\Current\Bin",
+            };
+
+            var vsPath = knownVsMSBuildPaths.FirstOrDefault(System.IO.Directory.Exists);
+            if (vsPath != null)
+            {
+                // VS MSBuild is .NET Framework only — BuildHost-netcore needs DOTNET_HOST_PATH
+                // to launch via dotnet.exe. RegisterMSBuildPath doesn't set this for VS instances.
+                var dotnetExe = @"C:\Program Files\dotnet\dotnet.exe";
+                if (System.IO.File.Exists(dotnetExe) &&
+                    string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH")))
+                {
+                    Environment.SetEnvironmentVariable("DOTNET_HOST_PATH", dotnetExe);
+                }
+
+                _registeredMSBuildPath = $"VS @ {vsPath}";
+                MSBuildLocator.RegisterMSBuildPath(vsPath);
+                return;
+            }
+
+            // Fall back to MSBuildLocator's VS discovery (covers non-standard install paths).
+            var vsInstance = MSBuildLocator.QueryVisualStudioInstances()
+                .Where(vs => vs.DiscoveryType == DiscoveryType.VisualStudioSetup)
+                .OrderByDescending(vs => vs.Version)
+                .FirstOrDefault();
+
+            if (vsInstance != null)
+            {
+                _registeredMSBuildPath = $"VS {vsInstance.Version} @ {vsInstance.MSBuildPath}";
+                MSBuildLocator.RegisterInstance(vsInstance);
+                return;
+            }
+
+            // No VS installation found — fall back to SDK 9.x (CoreCLR MSBuild).
+            // This works for SDK-style projects via BuildHost-netcore but will fail
+            // for .NET Framework solutions that require BuildHost-net472.
             var sdkInstance = MSBuildLocator.QueryVisualStudioInstances()
                 .Where(vs => vs.DiscoveryType == DiscoveryType.DotNetSdk && vs.Version.Major < 10)
                 .OrderByDescending(vs => vs.Version)
@@ -148,25 +190,6 @@ public sealed class RoslynWorkspaceLoader : IRoslynWorkspaceLoader
                 _registeredMSBuildPath = $"SDK {sdkInstance.Version} @ {sdkInstance.MSBuildPath}";
                 MSBuildLocator.RegisterInstance(sdkInstance);
                 return;
-            }
-
-            // VS 2022 (v17.x) works with BuildHost-net472 + SCI v9. VS 2026 (v18.x)
-            // is intentionally excluded for the reason above.
-            var vs2022Candidates = new[]
-            {
-                @"C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin",
-                @"C:\Program Files\Microsoft Visual Studio\2022\Professional\MSBuild\Current\Bin",
-                @"C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin",
-            };
-
-            foreach (var path in vs2022Candidates)
-            {
-                if (Directory.Exists(path))
-                {
-                    _registeredMSBuildPath = $"VS 2022 direct @ {path}";
-                    MSBuildLocator.RegisterMSBuildPath(path);
-                    return;
-                }
             }
 
             _registeredMSBuildPath = "SDK defaults";

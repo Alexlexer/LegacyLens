@@ -108,11 +108,8 @@ public sealed class RoslynWorkspaceLoader : IRoslynWorkspaceLoader
             current = current.InnerException;
         }
 
-        var detail = string.Join(" → ", parts);
+        var detail = string.Join(" -> ", parts);
 
-        // Some MSBuild/Roslyn failures cross process boundaries and only preserve the
-        // remote exception chain in ToString(). Keep a small bounded prefix so users
-        // can see the real loader error without dumping a huge stack trace into reports.
         if (exception.InnerException is null)
         {
             var full = exception.ToString();
@@ -153,6 +150,7 @@ public sealed class RoslynWorkspaceLoader : IRoslynWorkspaceLoader
 
             if (visualStudioInstance is not null)
             {
+                ConfigureDotNetHostPath();
                 _registeredMSBuildPath = $"Visual Studio {visualStudioInstance.Version} @ {visualStudioInstance.MSBuildPath}";
                 MSBuildLocator.RegisterInstance(visualStudioInstance);
                 return;
@@ -161,6 +159,7 @@ public sealed class RoslynWorkspaceLoader : IRoslynWorkspaceLoader
             var directMsBuildPath = FindVisualStudioMSBuildPath();
             if (directMsBuildPath is not null)
             {
+                ConfigureDotNetHostPath();
                 _registeredMSBuildPath = $"Visual Studio MSBuild @ {directMsBuildPath}";
                 MSBuildLocator.RegisterMSBuildPath(directMsBuildPath);
                 return;
@@ -169,6 +168,20 @@ public sealed class RoslynWorkspaceLoader : IRoslynWorkspaceLoader
             _registeredMSBuildPath = "MSBuildLocator.RegisterDefaults";
             MSBuildLocator.RegisterDefaults();
         }
+    }
+
+    // VS MSBuild is .NET Framework only - BuildHost-netcore needs DOTNET_HOST_PATH to
+    // launch via dotnet.exe. RegisterMSBuildPath doesn't set this for VS instances.
+    private static void ConfigureDotNetHostPath()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH")))
+            return;
+
+        var dotnetExe = @"C:\Program Files\dotnet\dotnet.exe";
+        if (File.Exists(dotnetExe))
+            Environment.SetEnvironmentVariable("DOTNET_HOST_PATH", dotnetExe);
     }
 
     private static bool IsVisualStudioInstance(VisualStudioInstance instance)
@@ -192,10 +205,9 @@ public sealed class RoslynWorkspaceLoader : IRoslynWorkspaceLoader
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86)
         };
-        // Prefer stable Visual Studio/MSBuild installs before preview/future toolsets.
-        // LegacyLens references MSBuild 17.x assemblies; registering VS 18/2026 first
-        // can make Roslyn's remote MSBuild host fail during static initialization
-        // (for example Microsoft.Build.Shared.XMakeElements) on legacy solutions.
+        // Prefer stable VS installs before preview/future toolsets. VS 2022 (17.x) is the
+        // safest match for Roslyn 5.3's bundled BuildHost-net472. VS 2026 (18) is supported
+        // via Directory.Build.targets exe.config patching.
         var versions = new[] { "2022", "2019", "2017", "18", "2026" };
         var editions = new[] { "Enterprise", "Professional", "Community", "BuildTools" };
 
@@ -234,8 +246,6 @@ public sealed class RoslynWorkspaceLoader : IRoslynWorkspaceLoader
 
     internal static int GetVisualStudioVersionPreference(Version version)
     {
-        // Visual Studio 2022 / MSBuild 17.x is the safest match for the explicit
-        // Microsoft.Build.Framework 17.x reference used by this project.
         if (version.Major == 17)
             return 400;
 
@@ -245,7 +255,6 @@ public sealed class RoslynWorkspaceLoader : IRoslynWorkspaceLoader
         if (version.Major == 15)
             return 200;
 
-        // Future/preview instances are a fallback, not the first choice.
         if (version.Major >= 18)
             return 100;
 
@@ -267,4 +276,3 @@ public sealed class RoslynWorkspaceLoader : IRoslynWorkspaceLoader
         }
     }
 }
-

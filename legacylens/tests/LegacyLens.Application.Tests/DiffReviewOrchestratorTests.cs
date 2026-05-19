@@ -353,6 +353,9 @@ public sealed class DiffReviewOrchestratorTests
         public Task<DependencyImpactResponse> GetDependencyImpactAsync(DependencyImpactRequest request, CancellationToken cancellationToken)
             => Task.FromResult(new DependencyImpactResponse("ok", request.Path, null, []));
 
+        public Task<GpuSearchIndexRootResponse> IndexRootAsync(GpuSearchIndexRootRequest request, CancellationToken cancellationToken)
+            => Task.FromResult(new GpuSearchIndexRootResponse { Ok = true, Directory = request.Directory, NormalizedDirectory = request.Directory, Started = true, Completed = true });
+
         public Task<SignalScanResponse> ScanSignalsAsync(SignalScanRequest request, CancellationToken cancellationToken)
             => throw new HttpRequestException("Not found", null, System.Net.HttpStatusCode.NotFound);
     }
@@ -381,6 +384,9 @@ public sealed class DiffReviewOrchestratorTests
             => throw new HttpRequestException("unavailable");
 
         public Task<DependencyImpactResponse> GetDependencyImpactAsync(DependencyImpactRequest request, CancellationToken cancellationToken)
+            => throw new HttpRequestException("unavailable");
+
+        public Task<GpuSearchIndexRootResponse> IndexRootAsync(GpuSearchIndexRootRequest request, CancellationToken cancellationToken)
             => throw new HttpRequestException("unavailable");
 
         public Task<SignalScanResponse> ScanSignalsAsync(SignalScanRequest request, CancellationToken cancellationToken)
@@ -420,6 +426,9 @@ public sealed class DiffReviewOrchestratorTests
 
         public Task<DependencyImpactResponse> GetDependencyImpactAsync(DependencyImpactRequest request, CancellationToken cancellationToken)
             => Task.FromResult(new DependencyImpactResponse("ok", request.Path, null, impactedFiles ?? []));
+
+        public Task<GpuSearchIndexRootResponse> IndexRootAsync(GpuSearchIndexRootRequest request, CancellationToken cancellationToken)
+            => Task.FromResult(new GpuSearchIndexRootResponse { Ok = true, Directory = request.Directory, NormalizedDirectory = request.Directory, Started = true, Completed = true });
 
         public Task<SignalScanResponse> ScanSignalsAsync(SignalScanRequest request, CancellationToken cancellationToken)
             => throw new HttpRequestException("Not found", null, System.Net.HttpStatusCode.NotFound);
@@ -510,6 +519,9 @@ public sealed class DiffReviewOrchestratorTests
 
         public Task<DependencyImpactResponse> GetDependencyImpactAsync(DependencyImpactRequest request, CancellationToken cancellationToken)
             => throw new HttpRequestException("impact read failed");
+
+        public Task<GpuSearchIndexRootResponse> IndexRootAsync(GpuSearchIndexRootRequest request, CancellationToken cancellationToken)
+            => Task.FromResult(new GpuSearchIndexRootResponse { Ok = true, Directory = request.Directory, NormalizedDirectory = request.Directory, Started = true, Completed = true });
 
         public Task<SignalScanResponse> ScanSignalsAsync(SignalScanRequest request, CancellationToken cancellationToken)
             => throw new HttpRequestException("Not found", null, System.Net.HttpStatusCode.NotFound);

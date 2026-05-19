@@ -435,6 +435,7 @@ public sealed class LegacyAuditOrchestratorTests : IDisposable
         public Task<ReadBlockResponse> ReadBlockAsync(ReadBlockRequest request, CancellationToken cancellationToken) => Task.FromResult(new ReadBlockResponse("ok", string.Empty, null, null, null, null, null));
         public Task<ReadSkeletonResponse> ReadSkeletonAsync(ReadSkeletonRequest request, CancellationToken cancellationToken) => Task.FromResult(new ReadSkeletonResponse("ok", string.Empty, null, null, null, null));
         public Task<DependencyImpactResponse> GetDependencyImpactAsync(DependencyImpactRequest request, CancellationToken cancellationToken) => Task.FromResult(new DependencyImpactResponse("ok", string.Empty, null, []));
+        public Task<GpuSearchIndexRootResponse> IndexRootAsync(GpuSearchIndexRootRequest request, CancellationToken cancellationToken) => Task.FromResult(new GpuSearchIndexRootResponse { Ok = true, Directory = request.Directory, NormalizedDirectory = request.Directory, Started = true, Completed = true });
 
         public Task<SignalScanResponse> ScanSignalsAsync(SignalScanRequest request, CancellationToken cancellationToken)
         {
@@ -461,6 +462,7 @@ public sealed class LegacyAuditOrchestratorTests : IDisposable
         public Task<ReadBlockResponse> ReadBlockAsync(ReadBlockRequest request, CancellationToken cancellationToken) => Task.FromResult(new ReadBlockResponse("ok", string.Empty, null, null, null, null, null));
         public Task<ReadSkeletonResponse> ReadSkeletonAsync(ReadSkeletonRequest request, CancellationToken cancellationToken) => Task.FromResult(new ReadSkeletonResponse("ok", string.Empty, null, null, null, null));
         public Task<DependencyImpactResponse> GetDependencyImpactAsync(DependencyImpactRequest request, CancellationToken cancellationToken) => Task.FromResult(new DependencyImpactResponse("ok", string.Empty, null, []));
+        public Task<GpuSearchIndexRootResponse> IndexRootAsync(GpuSearchIndexRootRequest request, CancellationToken cancellationToken) => Task.FromResult(new GpuSearchIndexRootResponse { Ok = true, Directory = request.Directory, NormalizedDirectory = request.Directory, Started = true, Completed = true });
         public Task<SignalScanResponse> ScanSignalsAsync(SignalScanRequest request, CancellationToken cancellationToken) => throw new HttpRequestException("Not found", null, System.Net.HttpStatusCode.NotFound);
     }
 
@@ -474,6 +476,7 @@ public sealed class LegacyAuditOrchestratorTests : IDisposable
         public Task<ReadBlockResponse> ReadBlockAsync(ReadBlockRequest request, CancellationToken cancellationToken) => throw new HttpRequestException("Connection refused");
         public Task<ReadSkeletonResponse> ReadSkeletonAsync(ReadSkeletonRequest request, CancellationToken cancellationToken) => throw new HttpRequestException("Connection refused");
         public Task<DependencyImpactResponse> GetDependencyImpactAsync(DependencyImpactRequest request, CancellationToken cancellationToken) => throw new HttpRequestException("Connection refused");
+        public Task<GpuSearchIndexRootResponse> IndexRootAsync(GpuSearchIndexRootRequest request, CancellationToken cancellationToken) => throw new HttpRequestException("Connection refused");
         public Task<SignalScanResponse> ScanSignalsAsync(SignalScanRequest request, CancellationToken cancellationToken) => throw new HttpRequestException("Connection refused");
     }
 

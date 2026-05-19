@@ -1,0 +1,155 @@
+<Project>
+
+  <!--
+    Roslyn 5.x ships BuildHost-netcore targeting net8.0 with rollForward=Major.
+    On .NET 10 the shared framework provides SCI 10.0.0 which conflicts with
+    MSBuild 17.x (SDK 9) that expects SCI 9.0.0, causing XMakeElements
+    TypeInitializationException. Force rollForward=LatestPatch so BuildHost
+    runs on .NET 8 (where its bundled SCI 9.0.0 is authoritative).
+    .NET 8.0 LTS runtime must be installed alongside .NET 10.
+  -->
+  <UsingTask TaskName="PatchTextInFile" TaskFactory="RoslynCodeTaskFactory"
+             AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <FilePath ParameterType="System.String" Required="true" />
+      <OldText ParameterType="System.String" Required="true" />
+      <NewText ParameterType="System.String" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        if (System.IO.File.Exists(FilePath))
+        {
+          var content = System.IO.File.ReadAllText(FilePath);
+          var updated = content.Replace(OldText, NewText);
+          if (updated != content)
+            System.IO.File.WriteAllText(FilePath, updated, new System.Text.UTF8Encoding(false));
+        }
+      ]]></Code>
+    </Task>
+  </UsingTask>
+
+  <!--
+    Pin the BuildHost to run on .NET 9 (same major as MSBuild 17.x in SDK 9.x).
+    Change version 8.0.0 -> 9.0.0 so the runtime uses the .NET 9 shared framework
+    (SCI 9.0.0, compatible with MSBuild 17.x) instead of rolling forward to .NET 10
+    (SCI 10.0.0, which causes XMakeElements TypeInitializationException).
+    rollForward: LatestPatch keeps it pinned to 9.x.
+    Requires Microsoft.NETCore.App 9.0.x runtime to be installed.
+  -->
+  <!--
+    VS 2026 MSBuild (18.x) ships SCI 10.x. The net472 BuildHost exe.config caps the
+    SCI binding redirect at 9.0.0.0. Extend the redirect to 10.0.0.0 and copy VS 2026's
+    SCI 10 DLL into the BuildHost-net472 directory so .NET Framework MSBuild loads.
+  -->
+  <PropertyGroup>
+    <_VS2026MSBuildBin>C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin</_VS2026MSBuildBin>
+    <!-- If VS 2022 is installed, RoslynWorkspaceLoader prefers it and the VS 2026 patches
+         are unnecessary (and would actively break BuildHost loading under MSBuild 17.x). -->
+    <_VS2022MSBuildBin>C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin</_VS2022MSBuildBin>
+    <_VS2022EntMSBuildBin>C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin</_VS2022EntMSBuildBin>
+    <_VS2022ProMSBuildBin>C:\Program Files\Microsoft Visual Studio\2022\Professional\MSBuild\Current\Bin</_VS2022ProMSBuildBin>
+    <_Net472HostDir>$(OutputPath)BuildHost-net472</_Net472HostDir>
+    <_Net472HostExeConfig>$(_Net472HostDir)\Microsoft.CodeAnalysis.Workspaces.MSBuild.BuildHost.exe.config</_Net472HostExeConfig>
+  </PropertyGroup>
+
+  <UsingTask TaskName="RewriteNet472ExeConfig" TaskFactory="RoslynCodeTaskFactory"
+             AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <FilePath ParameterType="System.String" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        // Idempotent: rewrite all VS 2026 dep redirects to their exact versions and add
+        // missing ones for Text.Json transitive deps. A custom sentinel comment guards
+        // against repeated insertion on rebuild.
+        if (!System.IO.File.Exists(FilePath)) return true;
+        var content = System.IO.File.ReadAllText(FilePath);
+        var original = content;
+
+        // Update existing redirects to VS 2026's actual assembly versions
+        var swaps = new System.Collections.Generic.Dictionary<string, string>
+        {
+          { "oldVersion=\"0.0.0.0-9.0.0.0\" newVersion=\"9.0.0.0\"",   "oldVersion=\"0.0.0.0-10.0.0.3\" newVersion=\"10.0.0.3\"" },
+          { "oldVersion=\"0.0.0.0-10.0.0.0\" newVersion=\"10.0.0.0\"", "oldVersion=\"0.0.0.0-10.0.0.3\" newVersion=\"10.0.0.3\"" },
+          { "oldVersion=\"0.0.0.0-4.0.4.0\" newVersion=\"4.0.4.0\"",   "oldVersion=\"0.0.0.0-4.0.5.0\" newVersion=\"4.0.5.0\"" },
+          { "oldVersion=\"0.0.0.0-4.0.2.0\" newVersion=\"4.0.2.0\"",   "oldVersion=\"0.0.0.0-4.0.5.0\" newVersion=\"4.0.5.0\"" },
+          { "oldVersion=\"0.0.0.0-4.1.5.0\" newVersion=\"4.1.5.0\"",   "oldVersion=\"0.0.0.0-4.1.6.0\" newVersion=\"4.1.6.0\"" },
+          { "oldVersion=\"0.0.0.0-6.0.1.0\" newVersion=\"6.0.1.0\"",   "oldVersion=\"0.0.0.0-6.0.3.0\" newVersion=\"6.0.3.0\"" },
+          { "oldVersion=\"0.0.0.0-4.2.1.0\" newVersion=\"4.2.1.0\"",   "oldVersion=\"0.0.0.0-4.2.4.0\" newVersion=\"4.2.4.0\"" },
+        };
+        foreach (var kv in swaps) content = content.Replace(kv.Key, kv.Value);
+
+        // Add redirects for assemblies Roslyn's exe.config doesn't redirect at all.
+        // Guarded by sentinel comment so we don't append on every rebuild.
+        const string sentinel = "<!-- LegacyLens VS2026 extra redirects -->";
+        if (!content.Contains(sentinel))
+        {
+          // Roslyn's exe.config has many sibling <assemblyBinding> blocks (one per dep).
+          // Append a new sibling block after the LAST </assemblyBinding>, not inside one.
+          const string lastClose = "    </assemblyBinding>";
+          int idx = content.LastIndexOf(lastClose);
+          if (idx >= 0)
+          {
+            int insertAt = idx + lastClose.Length;
+            var extra = "\r\n    <assemblyBinding xmlns=\"urn:schemas-microsoft-com:asm.v1\">\r\n"
+              + "      " + sentinel + "\r\n"
+              + "      <dependentAssembly>\r\n"
+              + "        <assemblyIdentity name=\"System.Text.Encodings.Web\" publicKeyToken=\"cc7b13ffcd2ddd51\" culture=\"neutral\" />\r\n"
+              + "        <bindingRedirect oldVersion=\"0.0.0.0-10.0.0.3\" newVersion=\"10.0.0.3\" />\r\n"
+              + "      </dependentAssembly>\r\n"
+              + "      <dependentAssembly>\r\n"
+              + "        <assemblyIdentity name=\"System.IO.Pipelines\" publicKeyToken=\"cc7b13ffcd2ddd51\" culture=\"neutral\" />\r\n"
+              + "        <bindingRedirect oldVersion=\"0.0.0.0-10.0.0.3\" newVersion=\"10.0.0.3\" />\r\n"
+              + "      </dependentAssembly>\r\n"
+              + "    </assemblyBinding>";
+            content = content.Substring(0, insertAt) + extra + content.Substring(insertAt);
+          }
+        }
+
+        if (content != original)
+          System.IO.File.WriteAllText(FilePath, content, new System.Text.UTF8Encoding(false));
+      ]]></Code>
+    </Task>
+  </UsingTask>
+
+  <Target Name="PatchNet472BuildHostSci" AfterTargets="Build"
+          Condition="Exists('$(_Net472HostExeConfig)') And Exists('$(_VS2026MSBuildBin)') And !Exists('$(_VS2022MSBuildBin)') And !Exists('$(_VS2022EntMSBuildBin)') And !Exists('$(_VS2022ProMSBuildBin)')">
+    <!-- VS 2026 (MSBuild 18.x) ships its own versions of SCI/Text.Json + transitive deps.
+         The Roslyn-bundled BuildHost-net472 references older versions; rewriting binding
+         redirects + copying the VS 2026 DLLs lets BuildHost-net472 load under MSBuild 18.x. -->
+    <RewriteNet472ExeConfig FilePath="$(_Net472HostExeConfig)" />
+    <!-- Replace bundled v9 DLLs with VS 2026's DLLs.
+         Text.Json 10.0.0.3 pulls a full dependency closure that all must come from VS 2026:
+         Memory, Buffers, CompilerServices.Unsafe, Numerics.Vectors, Threading.Tasks.Extensions. -->
+    <ItemGroup>
+      <_VS2026DllsToCopy Include="$(_VS2026MSBuildBin)\System.Collections.Immutable.dll" />
+      <_VS2026DllsToCopy Include="$(_VS2026MSBuildBin)\Microsoft.Bcl.AsyncInterfaces.dll" />
+      <_VS2026DllsToCopy Include="$(_VS2026MSBuildBin)\System.Text.Json.dll" />
+      <_VS2026DllsToCopy Include="$(_VS2026MSBuildBin)\System.Text.Encodings.Web.dll" />
+      <_VS2026DllsToCopy Include="$(_VS2026MSBuildBin)\System.IO.Pipelines.dll" />
+      <_VS2026DllsToCopy Include="$(_VS2026MSBuildBin)\System.Memory.dll" />
+      <_VS2026DllsToCopy Include="$(_VS2026MSBuildBin)\System.Buffers.dll" />
+      <_VS2026DllsToCopy Include="$(_VS2026MSBuildBin)\System.Runtime.CompilerServices.Unsafe.dll" />
+      <_VS2026DllsToCopy Include="$(_VS2026MSBuildBin)\System.Numerics.Vectors.dll" />
+      <_VS2026DllsToCopy Include="$(_VS2026MSBuildBin)\System.Threading.Tasks.Extensions.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_VS2026DllsToCopy)" DestinationFolder="$(_Net472HostDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="PatchBuildHostRollForward" AfterTargets="Build">
+    <PropertyGroup>
+      <_BuildHostConfig>$(OutputPath)BuildHost-netcore\Microsoft.CodeAnalysis.Workspaces.MSBuild.BuildHost.runtimeconfig.json</_BuildHostConfig>
+    </PropertyGroup>
+    <PatchTextInFile
+      Condition="Exists('$(_BuildHostConfig)')"
+      FilePath="$(_BuildHostConfig)"
+      OldText='"rollForward": "Major"'
+      NewText='"rollForward": "LatestPatch"' />
+    <PatchTextInFile
+      Condition="Exists('$(_BuildHostConfig)')"
+      FilePath="$(_BuildHostConfig)"
+      OldText='"version": "8.0.0"'
+      NewText='"version": "9.0.0"' />
+  </Target>
+
+</Project>

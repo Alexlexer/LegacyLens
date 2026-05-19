@@ -354,7 +354,7 @@ public sealed class DiffReviewOrchestratorTests
             => Task.FromResult(new DependencyImpactResponse("ok", request.Path, null, []));
 
         public Task<GpuSearchIndexRootResponse> IndexRootAsync(GpuSearchIndexRootRequest request, CancellationToken cancellationToken)
-            => Task.FromResult(new GpuSearchIndexRootResponse(true, request.Directory, request.Directory, true, true, null, null, null, null));
+            => Task.FromResult(new GpuSearchIndexRootResponse { Ok = true, Directory = request.Directory, NormalizedDirectory = request.Directory, Started = true, Completed = true });
 
         public Task<SignalScanResponse> ScanSignalsAsync(SignalScanRequest request, CancellationToken cancellationToken)
             => throw new HttpRequestException("Not found", null, System.Net.HttpStatusCode.NotFound);
@@ -428,7 +428,7 @@ public sealed class DiffReviewOrchestratorTests
             => Task.FromResult(new DependencyImpactResponse("ok", request.Path, null, impactedFiles ?? []));
 
         public Task<GpuSearchIndexRootResponse> IndexRootAsync(GpuSearchIndexRootRequest request, CancellationToken cancellationToken)
-            => Task.FromResult(new GpuSearchIndexRootResponse(true, request.Directory, request.Directory, true, true, null, null, null, null));
+            => Task.FromResult(new GpuSearchIndexRootResponse { Ok = true, Directory = request.Directory, NormalizedDirectory = request.Directory, Started = true, Completed = true });
 
         public Task<SignalScanResponse> ScanSignalsAsync(SignalScanRequest request, CancellationToken cancellationToken)
             => throw new HttpRequestException("Not found", null, System.Net.HttpStatusCode.NotFound);
@@ -521,7 +521,7 @@ public sealed class DiffReviewOrchestratorTests
             => throw new HttpRequestException("impact read failed");
 
         public Task<GpuSearchIndexRootResponse> IndexRootAsync(GpuSearchIndexRootRequest request, CancellationToken cancellationToken)
-            => Task.FromResult(new GpuSearchIndexRootResponse(true, request.Directory, request.Directory, true, true, null, null, null, null));
+            => Task.FromResult(new GpuSearchIndexRootResponse { Ok = true, Directory = request.Directory, NormalizedDirectory = request.Directory, Started = true, Completed = true });
 
         public Task<SignalScanResponse> ScanSignalsAsync(SignalScanRequest request, CancellationToken cancellationToken)
             => throw new HttpRequestException("Not found", null, System.Net.HttpStatusCode.NotFound);

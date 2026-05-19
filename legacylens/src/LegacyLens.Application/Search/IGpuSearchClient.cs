@@ -44,9 +44,5 @@ public interface IGpuSearchClient
     Task<SignalScanResponse> ScanSignalsAsync(
         SignalScanRequest request,
         CancellationToken cancellationToken);
-
-    Task<GpuSearchIndexRootResponse> IndexRootAsync(
-        GpuSearchIndexRootRequest request,
-        CancellationToken cancellationToken);
 }
 

@@ -1,5 +1,9 @@
 import './styles.css';
 
+// ============================================================
+// Types
+// ============================================================
+
 type SearchStatus = {
   isAvailable: boolean;
   health?: { status?: string } | null;
@@ -22,12 +26,6 @@ type OllamaModelStatus = {
   error?: string | null;
 };
 
-type OllamaPullResult = {
-  success?: boolean;
-  model?: string;
-  message?: string;
-  error?: string | null;
-};
 
 type GitDiffFile = {
   path?: string;
@@ -175,6 +173,7 @@ type ReportSummary = {
   generatedAtUtc?: string;
   createdAtUtc?: string;
   changedFileCount?: number;
+  findingCount?: number;
   llmProvider?: string;
   providerName?: string;
   reportType?: string;
@@ -283,191 +282,308 @@ type LegacyAuditReport = {
   recommendedNextSteps?: string[] | null;
   llmSummary?: string | null;
   markdown?: string;
+  metrics?: {
+    technologySignals?: number;
+    riskFindings?: number;
+    highCount?: number;
+    warningCount?: number;
+    infoCount?: number;
+    gpuMatches?: number;
+    indexedFiles?: number;
+    durationMs?: number;
+  } | null;
 };
 
-const app = document.querySelector<HTMLDivElement>('#app');
+// ============================================================
+// App scaffold
+// ============================================================
 
-if (!app) {
-  throw new Error('App root was not found.');
-}
+const appRoot = document.querySelector<HTMLDivElement>('#app');
+if (!appRoot) throw new Error('App root was not found.');
 
-app.innerHTML = `
-  <main class="shell">
-    <section class="hero panel">
-      <div>
-        <p class="eyebrow">Local legacy .NET review</p>
-        <h1>LegacyLens</h1>
-        <p class="muted">Flat, local-first review workflow powered by Git diffs, gpu-search-mcp, and optional local LLM summaries.</p>
+appRoot.innerHTML = `
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"></div>
+        <span class="brand-name"><b>LegacyLens</b></span>
+        <span class="brand-version">v0.4.0 · alpha</span>
       </div>
-      <button id="statusButton" class="ghost">Check gpu-search</button>
-    </section>
-
-    <section class="grid">
-      <div class="panel stack">
-        <label for="repoPath">Repository path</label>
-        <input id="repoPath" placeholder="D:\\\\Projects\\\\ExampleRepo" />
-        <label class="check"><input id="useLlm" type="checkbox" /> Include local LLM summary</label>
-        <div class="actions">
-          <button id="previewButton">Preview diff</button>
-          <button id="reviewButton">Run review</button>
-          <button id="analyzeButton" class="secondary">.NET analysis</button>
+      <div class="topbar-status">
+        <div class="status-chip off" id="chipGpu">
+          <span class="dot"></span>
+          <span>gpu-search</span>
+          <span class="label-mono" id="chipGpuLabel">checking…</span>
         </div>
-        <details class="audit-options">
-          <summary>Legacy Audit</summary>
-          <div class="stack audit-form">
-            <label class="check"><input id="auditUseLlm" type="checkbox" /> Use LLM summary</label>
-            <label class="check"><input id="auditIncludeRoslyn" type="checkbox" checked /> Include Roslyn</label>
-            <label class="check"><input id="auditIncludeGpuSearch" type="checkbox" checked /> Include gpu-search</label>
-            <label class="check"><input id="auditIncludePresets" type="checkbox" checked /> Include .NET presets</label>
-            <label class="check"><input id="auditIncludeDi" type="checkbox" checked /> Include DI analysis</label>
-            <button id="auditButton" class="secondary">Run legacy audit</button>
+        <div class="status-chip off" id="chipOllama">
+          <span class="dot"></span>
+          <span>ollama</span>
+          <span class="label-mono" id="chipOllamaLabel">checking…</span>
+        </div>
+      </div>
+    </header>
+    <nav class="tabs">
+      <button class="tab active" data-tab="audit">Legacy Audit</button>
+      <button class="tab" data-tab="review">Diff Review</button>
+      <button class="tab" data-tab="analyze">.NET Analysis</button>
+      <div class="tab-spacer"></div>
+      <div class="kbd-hint" style="padding-right:8px">
+        <span>switch</span><span class="kbd">⌃</span><span class="kbd">⇥</span>
+      </div>
+    </nav>
+    <div class="workspace">
+      <main class="main">
+        <section class="run-card">
+          <div class="run-card-head">
+            <h2 id="runTitle">LEGACY AUDIT</h2>
+            <span class="breadcrumb" id="runBreadcrumb">workflow / audit / new run</span>
           </div>
-        </details>
-        <details class="audit-options">
-          <summary>Ollama model</summary>
-          <div class="stack audit-form">
-            <div id="ollamaStatus" class="muted">Status not checked.</div>
-            <div class="actions compact">
-              <button id="ollamaStatusButton" class="ghost small">Refresh Ollama status</button>
-              <button id="ollamaPullButton" class="secondary small" disabled>Pull configured model</button>
+          <div class="run-row">
+            <div class="input-group" style="flex:1">
+              <span class="prefix">repo</span>
+              <input id="repoPath" spellcheck="false" placeholder="D:\\Repos\\ExampleProject" />
+              <button class="clear" id="clearRepoPath" title="Clear">×</button>
             </div>
+            <button class="btn ghost" id="previewButton">Preview diff</button>
+            <button class="btn primary" id="runButton">Run audit <span class="kbd">↵</span></button>
           </div>
-        </details>
-      </div>
-      <div class="panel stack">
-        <div class="row">
-          <h2>Saved reports</h2>
-          <button id="refreshReportsButton" class="ghost small">Refresh</button>
+          <div class="run-options">
+            <span class="group-label">Enrichment</span>
+            <label class="check"><input id="auditIncludeRoslyn" type="checkbox" checked /> Roslyn</label>
+            <label class="check"><input id="auditIncludeGpuSearch" type="checkbox" checked /> gpu-search</label>
+            <label class="check"><input id="auditIncludeDi" type="checkbox" checked /> Dependency injection</label>
+            <label class="check"><input id="auditIncludePresets" type="checkbox" checked /> .NET presets</label>
+            <label class="check"><input id="useLlm" type="checkbox" /> LLM summary</label>
+            <div class="spacer"></div>
+          </div>
+        </section>
+        <div id="reportArea" class="empty-state">
+          <p>Run an audit, review, or analysis to see results.</p>
         </div>
-        <div id="reports" class="list muted">No reports loaded.</div>
-      </div>
-    </section>
-
-    <section class="panel stack">
-      <div class="row">
-        <h2>Report viewer</h2>
-        <span id="statusPill" class="pill">Ready</span>
-      </div>
-      <div id="toast" class="toast" aria-live="polite"></div>
-      <div id="output" class="output muted">Run a preview, review, or analysis to see results.</div>
-    </section>
-  </main>
+      </main>
+      <aside class="rail">
+        <div class="rail-head">
+          <h2>Saved reports</h2>
+          <button class="btn ghost sm" id="refreshReportsButton">Refresh</button>
+        </div>
+        <div class="rail-filter">
+          <button class="active" data-rail-filter="all">All</button>
+          <button data-rail-filter="audit">Audits</button>
+          <button data-rail-filter="review">Reviews</button>
+        </div>
+        <div id="railItems"><p style="padding:12px;color:var(--muted);font-size:var(--t-sm)">Loading…</p></div>
+        <div class="rail-foot">local sqlite · data/legacylens.db</div>
+      </aside>
+    </div>
+    <div id="toast" class="toast" aria-live="polite"></div>
+  </div>
 `;
 
-const repoPath = getInput('repoPath');
-const useLlm = getInput('useLlm') as HTMLInputElement;
-const output = getElement('output');
-const statusPill = getElement('statusPill');
-const reports = getElement('reports');
-const toast = getElement('toast');
-const ollamaStatus = getElement('ollamaStatus');
-const copyPayloads = new Map<string, string>();
+// ============================================================
+// State & element references
+// ============================================================
+
+let activeTab = 'audit';
+let railFilter = 'all';
+let activeReportId: string | null = null;
+let allReports: ReportSummary[] = [];
 let currentOllamaStatus: OllamaModelStatus | null = null;
-let isPullingOllamaModel = false;
+const copyPayloads = new Map<string, string>();
 
-bind('statusButton', checkStatus);
+const repoPathInput = getInput('repoPath');
+const useLlmInput = getInput('useLlm');
+const toast = getElement('toast');
+
+// ============================================================
+// Event bindings
+// ============================================================
+
+document.querySelectorAll<HTMLButtonElement>('.tab[data-tab]').forEach((btn) => {
+  btn.addEventListener('click', () => switchTab(btn.dataset.tab ?? 'audit'));
+});
+
+document.querySelectorAll<HTMLButtonElement>('[data-rail-filter]').forEach((btn) => {
+  btn.addEventListener('click', () => setRailFilter(btn.dataset.railFilter ?? 'all'));
+});
+
+bind('clearRepoPath', () => { repoPathInput.value = ''; repoPathInput.focus(); });
 bind('previewButton', previewDiff);
-bind('reviewButton', runReview);
-bind('analyzeButton', runAnalysis);
-bind('auditButton', runAudit);
+bind('runButton', runPrimary);
 bind('refreshReportsButton', loadReports);
-bind('ollamaStatusButton', refreshOllamaStatus);
-bind('ollamaPullButton', pullConfiguredOllamaModel);
 
+document.getElementById('chipGpu')?.addEventListener('click', () => void checkStatus());
+document.getElementById('chipOllama')?.addEventListener('click', () => void refreshOllamaStatus());
+
+repoPathInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') void runPrimary();
+});
+
+// ============================================================
+// Startup
+// ============================================================
+
+void checkStatus();
+void refreshOllamaStatus();
 void loadReports();
 
-async function checkStatus(): Promise<void> {
-  await run('Checking gpu-search...', async () => {
-    const status = await api<SearchStatus>('/api/search/status');
-    output.innerHTML = card(
-      status.isAvailable ? 'gpu-search is available' : 'gpu-search is unavailable',
-      [
-        `Health: ${status.health?.status ?? 'n/a'}`,
-        `Backend: ${status.stats?.backend ?? 'n/a'}`,
-        `Device: ${status.stats?.device ?? 'n/a'}`,
-        `Indexed files: ${status.stats?.indexedFileCount ?? 'n/a'}`,
-        status.error ? `Error: ${status.error}` : '',
-      ].filter(Boolean),
-    );
+// ============================================================
+// Tab / rail logic
+// ============================================================
+
+function switchTab(tab: string): void {
+  activeTab = tab;
+  document.querySelectorAll<HTMLButtonElement>('.tab[data-tab]').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
   });
+  const titleMap: Record<string, string> = { audit: 'LEGACY AUDIT', review: 'DIFF REVIEW', analyze: '.NET ANALYSIS' };
+  const labelMap: Record<string, string> = { audit: 'Run audit', review: 'Run review', analyze: 'Run analysis' };
+  const runTitle = document.getElementById('runTitle');
+  const runBreadcrumb = document.getElementById('runBreadcrumb');
+  const runButton = document.getElementById('runButton') as HTMLButtonElement | null;
+  if (runTitle) runTitle.textContent = titleMap[tab] ?? tab.toUpperCase();
+  if (runBreadcrumb) runBreadcrumb.textContent = `workflow / ${tab} / new run`;
+  if (runButton && !runButton.disabled) {
+    runButton.innerHTML = `${labelMap[tab] ?? 'Run'} <span class="kbd">↵</span>`;
+  }
 }
 
-async function refreshOllamaStatus(): Promise<void> {
-  await run('Checking Ollama...', async () => {
-    currentOllamaStatus = await api<OllamaModelStatus>('/api/llm/ollama/status');
-    renderOllamaStatus(currentOllamaStatus);
+function setRailFilter(filter: string): void {
+  railFilter = filter;
+  document.querySelectorAll<HTMLButtonElement>('[data-rail-filter]').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.railFilter === filter);
   });
+  renderRailItems();
 }
 
-async function pullConfiguredOllamaModel(): Promise<void> {
-  if (isPullingOllamaModel) {
+function renderRailItems(): void {
+  const railItems = document.getElementById('railItems');
+  if (!railItems) return;
+
+  const filtered = allReports.filter((r) => {
+    if (railFilter === 'audit') return r.reportType === 'LegacyAudit';
+    if (railFilter === 'review') return r.reportType !== 'LegacyAudit';
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    railItems.innerHTML = '<p style="padding:12px;color:var(--muted);font-size:var(--t-sm)">No reports match this filter.</p>';
     return;
   }
 
-  isPullingOllamaModel = true;
-  updateOllamaPullButton();
-  await run('Pulling Ollama model...', async () => {
-    const result = await api<OllamaPullResult>('/api/llm/ollama/pull', {
-      method: 'POST',
-      body: JSON.stringify({}),
+  railItems.innerHTML = filtered.map(reportItem).join('');
+
+  railItems.querySelectorAll<HTMLElement>('.report-item[data-view]').forEach((el) => {
+    el.addEventListener('click', () => {
+      activeReportId = el.dataset.view ?? null;
+      document.querySelectorAll<HTMLElement>('.report-item').forEach((item) => {
+        item.classList.toggle('active', item.dataset.view === activeReportId);
+      });
+      void viewReport(el.dataset.view ?? '', el.dataset.viewType);
     });
-
-    if (!result.success) {
-      throw new Error(result.error ? `${result.message} ${result.error}` : result.message ?? 'Ollama pull failed.');
-    }
-
-    showToast(result.message ?? 'Ollama model pulled.');
-    currentOllamaStatus = await api<OllamaModelStatus>('/api/llm/ollama/status');
-    renderOllamaStatus(currentOllamaStatus);
   });
-  isPullingOllamaModel = false;
-  updateOllamaPullButton();
+
+  railItems.querySelectorAll<HTMLButtonElement>('[data-delete]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      void deleteReport(btn.dataset.delete ?? '');
+    });
+  });
+
+  railItems.querySelectorAll<HTMLButtonElement>('[data-export]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      void exportAuditReport(btn.dataset.export ?? '', btn.dataset.format ?? '');
+    });
+  });
 }
 
-function renderOllamaStatus(status: OllamaModelStatus): void {
-  const installed = status.installedModels ?? [];
-  const installedText = installed.length <= 5
-    ? installed.join(', ') || 'none'
-    : `${installed.length} installed model(s)`;
-  ollamaStatus.innerHTML = `
-    <div class="meta-grid">
-      ${meta('Reachable', status.serverReachable ? 'Yes' : 'No')}
-      ${meta('Configured model', status.configuredModel)}
-      ${meta('Model installed', status.modelInstalled ? 'Yes' : 'No')}
-      ${meta('Installed', installedText)}
-    </div>
-    <p class="${status.serverReachable && status.modelInstalled ? 'muted' : 'error'}">${escapeHtml(status.message ?? '')}</p>
-    ${status.error ? `<p class="muted">${escapeHtml(status.error)}</p>` : ''}
-  `;
-  updateOllamaPullButton();
+// ============================================================
+// Status / Ollama
+// ============================================================
+
+async function checkStatus(): Promise<void> {
+  const chip = document.getElementById('chipGpu');
+  const label = document.getElementById('chipGpuLabel');
+  try {
+    const status = await api<SearchStatus>('/api/search/status');
+    if (!chip || !label) return;
+    const isOk = status.isAvailable;
+    chip.className = isOk ? 'status-chip' : 'status-chip off';
+    const fileCount = status.stats?.indexedFileCount;
+    label.textContent = isOk
+      ? `${status.stats?.device ?? 'ready'}${fileCount != null ? ' · ' + fileCount.toLocaleString() + ' files' : ''}`
+      : (status.error ?? 'unavailable');
+  } catch {
+    if (chip) chip.className = 'status-chip off';
+    if (label) label.textContent = 'error';
+  }
 }
 
-function updateOllamaPullButton(): void {
-  const button = document.getElementById('ollamaPullButton') as HTMLButtonElement | null;
-  if (!button) return;
-  const canPull = Boolean(currentOllamaStatus?.serverReachable);
-  button.disabled = !canPull || isPullingOllamaModel;
-  button.textContent = isPullingOllamaModel ? 'Pulling...' : 'Pull configured model';
+async function refreshOllamaStatus(): Promise<void> {
+  try {
+    currentOllamaStatus = await api<OllamaModelStatus>('/api/llm/ollama/status');
+    renderOllamaChip(currentOllamaStatus);
+  } catch {
+    const chip = document.getElementById('chipOllama');
+    const label = document.getElementById('chipOllamaLabel');
+    if (chip) chip.className = 'status-chip off';
+    if (label) label.textContent = 'error';
+  }
+}
+
+function renderOllamaChip(status: OllamaModelStatus): void {
+  const chip = document.getElementById('chipOllama');
+  const label = document.getElementById('chipOllamaLabel');
+  if (!chip || !label) return;
+  const isOk = status.serverReachable && status.modelInstalled;
+  const isWarn = status.serverReachable && !status.modelInstalled;
+  chip.className = isOk ? 'status-chip' : isWarn ? 'status-chip warn' : 'status-chip off';
+  const model = status.configuredModel ?? 'unknown';
+  label.textContent = isOk ? model : isWarn ? `${model} · not installed` : 'offline';
+}
+
+
+// ============================================================
+// Primary actions
+// ============================================================
+
+async function runPrimary(): Promise<void> {
+  if (activeTab === 'review') await runReview();
+  else if (activeTab === 'analyze') await runAnalysis();
+  else await runAudit();
 }
 
 async function previewDiff(): Promise<void> {
-  await run('Loading diff preview...', async () => {
+  await run('Loading diff preview…', async () => {
     const preview = await api<DiffPreview>('/api/review/diff/preview', {
       method: 'POST',
-      body: JSON.stringify({ repoPath: repoPath.value }),
+      body: JSON.stringify({ repoPath: repoPathInput.value }),
     });
-    output.innerHTML = `
-      ${card(`${preview.changedFileCount ?? 0} changed file(s)`, (preview.files ?? []).map(formatFile))}
-      <pre>${escapeHtml(preview.diff || 'No diff content.')}</pre>
+    const reportArea = getElement('reportArea');
+    reportArea.className = 'report-shell';
+    reportArea.innerHTML = `
+      <div class="report-head">
+        <div>
+          <p class="report-eyebrow">Diff Preview</p>
+          <h1 class="report-title">${escapeHtml(repoTail(repoPathInput.value))}</h1>
+          <div class="report-subtitle">${escapeHtml(repoPathInput.value)} · ${preview.changedFileCount ?? 0} changed file(s)</div>
+        </div>
+      </div>
+      ${renderAuditSection('Changed files', preview.changedFileCount ?? 0, `
+        <ul>
+          ${(preview.files ?? []).map((f) => `<li style="font-family:var(--font-mono);font-size:var(--t-sm)">${escapeHtml(f.status ?? 'M')} ${escapeHtml(f.path ?? f.filePath ?? '')} <span style="color:var(--muted)">(+${f.additions ?? 0}/-${f.deletions ?? 0})</span></li>`).join('')}
+        </ul>
+      `)}
+      ${renderAuditSection('Diff', null, `<pre>${escapeHtml(preview.diff || 'No diff content.')}</pre>`)}
     `;
   });
 }
 
 async function runReview(): Promise<void> {
-  await run('Generating review...', async () => {
+  await run('Generating review…', async () => {
     const report = await api<ReviewReport>('/api/review/diff', {
       method: 'POST',
-      body: JSON.stringify({ repoPath: repoPath.value, useLlm: useLlm.checked }),
+      body: JSON.stringify({ repoPath: repoPathInput.value, useLlm: useLlmInput.checked }),
     });
     renderReport(report);
     await loadReports();
@@ -475,24 +591,43 @@ async function runReview(): Promise<void> {
 }
 
 async function runAnalysis(): Promise<void> {
-  await run('Running .NET analysis...', async () => {
+  await run('Running .NET analysis…', async () => {
     const analysis = await api<DotNetAnalysis>('/api/dotnet/analyze', {
       method: 'POST',
-      body: JSON.stringify({ repoPath: repoPath.value, limitPerPreset: 8 }),
+      body: JSON.stringify({ repoPath: repoPathInput.value, limitPerPreset: 8 }),
     });
-    output.innerHTML = card(
-      `${analysis.findings?.length ?? 0} preset finding(s)`,
-      (analysis.findings ?? []).map(
-        (finding) =>
-          `${finding.presetId ?? 'preset'} · ${finding.filePath ?? 'unknown file'}${finding.line ? `:${finding.line}` : ''} · ${finding.snippet ?? ''}`,
-      ),
-    );
+    const reportArea = getElement('reportArea');
+    reportArea.className = 'report-shell';
+    const findings = analysis.findings ?? [];
+    const rows = findings.map((f) => `
+      <tr>
+        <td class="col-sev"><span class="badge ${sevClass(f.severity)}">${sevLabel(f.severity ?? '')}</span></td>
+        <td class="col-code">${escapeHtml(f.presetId ?? '')}</td>
+        <td class="col-title">
+          <div>${escapeHtml(f.filePath ?? 'unknown file')}${f.line ? `:${f.line}` : ''}</div>
+          ${f.snippet ? `<div class="desc">${escapeHtml(f.snippet)}</div>` : ''}
+        </td>
+        <td class="col-loc">${escapeHtml(f.rationale ?? '')}</td>
+      </tr>
+    `).join('');
+    reportArea.innerHTML = `
+      <div class="report-head">
+        <div>
+          <p class="report-eyebrow">.NET Analysis</p>
+          <h1 class="report-title">${escapeHtml(repoTail(repoPathInput.value))}</h1>
+          <div class="report-subtitle">${escapeHtml(repoPathInput.value)} · ${findings.length} finding(s)</div>
+        </div>
+      </div>
+      ${renderAuditSection('Findings', findings.length, findings.length
+        ? `<table class="finding-table"><thead><tr><th>Sev</th><th>Preset</th><th>Location</th><th>Note</th></tr></thead><tbody>${rows}</tbody></table>`
+        : '<p class="note">No findings returned.</p>'
+      )}
+    `;
   });
 }
 
 async function runAudit(): Promise<void> {
-  await run('Running legacy audit...', async () => {
-    const auditUseLlm = document.getElementById('auditUseLlm') as HTMLInputElement | null;
+  await run('Running legacy audit…', async () => {
     const auditIncludeRoslyn = document.getElementById('auditIncludeRoslyn') as HTMLInputElement | null;
     const auditIncludeGpuSearch = document.getElementById('auditIncludeGpuSearch') as HTMLInputElement | null;
     const auditIncludePresets = document.getElementById('auditIncludePresets') as HTMLInputElement | null;
@@ -501,8 +636,8 @@ async function runAudit(): Promise<void> {
     const report = await api<LegacyAuditReport>('/api/audit/legacy-dotnet', {
       method: 'POST',
       body: JSON.stringify({
-        repoPath: repoPath.value,
-        useLlm: auditUseLlm?.checked ?? false,
+        repoPath: repoPathInput.value,
+        useLlm: useLlmInput.checked,
         includeRoslyn: auditIncludeRoslyn?.checked ?? true,
         includeGpuSearch: auditIncludeGpuSearch?.checked ?? true,
         includeDotNetPresets: auditIncludePresets?.checked ?? true,
@@ -514,289 +649,23 @@ async function runAudit(): Promise<void> {
   });
 }
 
-function renderAuditReport(report: LegacyAuditReport): void {
-  copyPayloads.clear();
-  const markdown = report.markdown ?? '';
-  registerCopy('audit-markdown', markdown);
-
-  output.innerHTML = `
-    <article class="viewer">
-      <header class="viewer-header">
-        <div>
-          <p class="eyebrow">Legacy .NET Audit Report</p>
-          <h2>${escapeHtml(report.reportId ?? 'Audit report')}</h2>
-        </div>
-        <div class="actions compact">
-          <button class="ghost small" data-copy="audit-markdown">Copy Markdown</button>
-        </div>
-      </header>
-      ${renderAuditSummary(report)}
-      ${renderAuditWorkspace(report)}
-      ${renderTechnologySignals(report.technologySignals ?? [])}
-      ${renderArchitectureSignals(report.architectureSignals ?? [])}
-      ${renderAuditFindings(report.riskFindings ?? [])}
-      ${renderAuditRoslynSummary(report.roslynSummary ?? null)}
-      ${renderAuditDiSummary(report.dependencyInjectionSummary ?? null)}
-      ${renderAuditGpuSearchSummary(report.gpuSearchSummary ?? null)}
-      ${renderNextSteps(report.recommendedNextSteps ?? [])}
-      ${report.llmSummary ? renderSection('LLM Summary', `<div class="llm-summary">${escapeHtml(report.llmSummary)}</div>`) : ''}
-      ${renderRawMarkdown(markdown)}
-    </article>
-  `;
-
-  output.querySelectorAll<HTMLButtonElement>('[data-copy]').forEach((button) => {
-    button.addEventListener('click', () => copyText(button.dataset.copy ?? ''));
-  });
-}
-
-function renderAuditSummary(report: LegacyAuditReport): string {
-  return renderSection(
-    'Summary',
-    `
-      <div class="meta-grid">
-        ${meta('Repository', report.repoPath)}
-        ${meta('Generated', report.generatedAtUtc ? formatDate(report.generatedAtUtc) : undefined)}
-        ${meta('Technology signals', String(report.technologySignals?.length ?? 0))}
-        ${meta('Risk findings', String(report.riskFindings?.length ?? 0))}
-      </div>
-      <p>${escapeHtml(report.summary ?? '')}</p>
-    `,
-  );
-}
-
-function renderAuditWorkspace(report: LegacyAuditReport): string {
-  const ws = report.workspaceSummary;
-  if (!ws) return '';
-
-  return renderSection(
-    'Workspace',
-    `
-      <div class="meta-grid">
-        ${meta('Selected workspace', ws.selectedWorkspacePath ?? 'None')}
-        ${meta('Kind', ws.selectedWorkspaceKind ?? 'n/a')}
-        ${meta('Candidates', `${ws.totalCandidates ?? 0} (${ws.slnxCount ?? 0} .slnx, ${ws.slnCount ?? 0} .sln, ${ws.csprojCount ?? 0} .csproj)`)}
-      </div>
-      ${ws.warnings?.length ? detailsList('Warnings', ws.warnings) : ''}
-    `,
-  );
-}
-
-function renderTechnologySignals(signals: TechnologySignal[]): string {
-  if (signals.length === 0) {
-    return renderSection('Technology Signals', '<p class="empty">No signals detected.</p>');
-  }
-
-  const items = signals.map((s) => `
-    <article class="finding-card">
-      <div class="row">
-        <span class="badge">${escapeHtml(s.category ?? 'Signal')}</span>
-        <span class="badge confidence">${escapeHtml(s.confidence ?? 'unknown')}</span>
-      </div>
-      <h3>${escapeHtml(s.name ?? 'Signal')}</h3>
-      ${s.filePath ? `<p class="mono muted">${escapeHtml(s.filePath)}</p>` : ''}
-      <p class="muted">${escapeHtml(s.evidence ?? '')}</p>
-    </article>
-  `).join('');
-
-  return renderSection('Technology Signals', `<div class="finding-list">${items}</div>`);
-}
-
-function renderArchitectureSignals(signals: ArchitectureSignal[]): string {
-  if (signals.length === 0) {
-    return renderSection('Architecture Signals', '<p class="empty">No signals detected.</p>');
-  }
-
-  const items = signals.map((s) => `
-    <article class="finding-card">
-      <div class="row">
-        <span class="badge confidence">${escapeHtml(s.confidence ?? 'unknown')}</span>
-      </div>
-      <h3>${escapeHtml(s.name ?? 'Signal')}</h3>
-      <p>${escapeHtml(s.message ?? '')}</p>
-      <p class="muted">${escapeHtml(s.evidence ?? '')}</p>
-    </article>
-  `).join('');
-
-  return renderSection('Architecture Signals', `<div class="finding-list">${items}</div>`);
-}
-
-function renderAuditFindings(findings: AuditFinding[]): string {
-  if (findings.length === 0) {
-    return renderSection('Risk Findings', '<p class="empty">No risk findings.</p>');
-  }
-
-  const items = findings.map((f) => {
-    const severity = normalizeSeverity(f.severity);
-    return `
-      <article class="finding-card">
-        <div class="row">
-          <span class="badge severity-${severity.toLowerCase()}">${severity}</span>
-          ${f.code ? `<span class="muted mono">${escapeHtml(f.code)}</span>` : ''}
-        </div>
-        <h3>${escapeHtml(f.title ?? f.code ?? 'Finding')}</h3>
-        ${f.filePath ? `<p class="mono muted">${escapeHtml(f.filePath)}${f.line ? `:${f.line}` : ''}</p>` : ''}
-        <p>${escapeHtml(f.message ?? '')}</p>
-        ${f.evidence ? `<p class="muted"><em>Evidence: ${escapeHtml(f.evidence)}</em></p>` : ''}
-      </article>
-    `;
-  }).join('');
-
-  return renderSection('Risk Findings', `<div class="finding-list">${items}</div>`);
-}
-
-function renderAuditRoslynSummary(roslyn: AuditRoslynSummary | null): string {
-  if (!roslyn) {
-    return renderSection('Roslyn Summary', '<p class="empty">Roslyn analysis was not requested.</p>');
-  }
-
-  if (!roslyn.workspaceLoaded) {
-    return renderSection(
-      'Roslyn Summary',
-      `<p class="error">Roslyn workspace could not be loaded.</p>
-       ${roslyn.errorMessage ? `<p class="muted">${escapeHtml(roslyn.errorMessage)}</p>` : ''}
-       ${roslyn.warnings?.length ? detailsList('Warnings', roslyn.warnings) : ''}`,
-    );
-  }
-
-  return renderSection(
-    'Roslyn Summary',
-    `
-      <div class="meta-grid">
-        ${meta('Workspace', roslyn.workspacePath ?? 'n/a')}
-        ${meta('Kind', roslyn.workspaceKind ?? 'n/a')}
-        ${meta('Projects', String(roslyn.projectCount ?? 0))}
-        ${meta('Documents', String(roslyn.documentCount ?? 0))}
-        ${meta('Symbols', String(roslyn.symbolCount ?? 0))}
-        ${meta('Classes', String(roslyn.classCount ?? 0))}
-        ${meta('Interfaces', String(roslyn.interfaceCount ?? 0))}
-        ${meta('Methods', String(roslyn.methodCount ?? 0))}
-      </div>
-      ${roslyn.warnings?.length ? detailsList('Warnings', roslyn.warnings) : ''}
-    `,
-  );
-}
-
-function renderAuditDiSummary(di: DiSummary | null): string {
-  if (!di) {
-    return renderSection('Dependency Injection Summary', '<p class="empty">DI analysis was not requested.</p>');
-  }
-
-  const lifetimes = di.registrationsByLifetime
-    ? Object.entries(di.registrationsByLifetime).map(([k, v]) => `${k}: ${v}`).join(', ')
-    : 'n/a';
-
-  const diFindings = (di.findings ?? []).map((f) => `
-    <article class="finding-card">
-      <div class="row">
-        <span class="badge severity-${normalizeSeverity(f.severity).toLowerCase()}">${normalizeSeverity(f.severity)}</span>
-        ${f.code ? `<span class="muted mono">${escapeHtml(f.code)}</span>` : ''}
-      </div>
-      <p>${escapeHtml(f.message ?? '')}</p>
-      ${f.filePath ? `<p class="mono muted">${escapeHtml(f.filePath)}${f.line ? `:${f.line}` : ''}</p>` : ''}
-    </article>
-  `).join('');
-
-  return renderSection(
-    'Dependency Injection Summary',
-    `
-      <div class="meta-grid">
-        ${meta('Registrations', String(di.registrationCount ?? 0))}
-        ${meta('Constructor deps', String(di.constructorDependencyCount ?? 0))}
-        ${meta('Findings', String(di.findingCount ?? 0))}
-        ${meta('By lifetime', lifetimes)}
-      </div>
-      ${diFindings ? `<div class="finding-list">${diFindings}</div>` : ''}
-    `,
-  );
-}
-
-function renderAuditGpuSearchSummary(gpuSearch: GpuSearchAuditSummary | null): string {
-  if (!gpuSearch) {
-    return renderSection('gpu-search Signal Scan', '<p class="empty">gpu-search was not requested.</p>');
-  }
-
-  if (!gpuSearch.wasAvailable) {
-    return renderSection(
-      'gpu-search Signal Scan',
-      `<p class="error">gpu-search was unavailable.</p>
-       ${gpuSearch.errorMessage ? `<p class="muted">${escapeHtml(gpuSearch.errorMessage)}</p>` : ''}`,
-    );
-  }
-
-  const modeBadge = gpuSearch.usedSignalScan
-    ? '<span class="badge badge-success">Signal Scan</span>'
-    : '<span class="badge badge-warning">Fallback: Individual Queries</span>';
-
-  const categoryPills = gpuSearch.usedSignalScan && (gpuSearch.signalCategories?.length ?? 0) > 0
-    ? `<div class="tag-list">${(gpuSearch.signalCategories ?? []).map((c) => `<span class="tag">${escapeHtml(c)}</span>`).join('')}</div>`
-    : '';
-
-  const scanWarnings = (gpuSearch.scanWarnings ?? []).map((w) => `<p class="warning">⚠ ${escapeHtml(w)}</p>`).join('');
-  const scanLimitations = (gpuSearch.scanLimitations ?? []).map((l) => `<li>${escapeHtml(l)}</li>`).join('');
-
-  const countLabel = gpuSearch.usedSignalScan ? 'Signals scanned' : 'Queries run';
-
-  const resultItems = (gpuSearch.results ?? []).slice(0, 20).map((r) => `
-    <article class="context-card">
-      <div class="row">
-        <span class="muted mono">${escapeHtml(r.query ?? '')}</span>
-        ${r.filePath ? `<span class="mono">${escapeHtml(r.filePath)}${r.line ? `:${r.line}` : ''}</span>` : ''}
-      </div>
-      ${r.snippet ? `<pre>${escapeHtml(r.snippet)}</pre>` : ''}
-    </article>
-  `).join('');
-
-  return renderSection(
-    'gpu-search Signal Scan',
-    `
-      <div class="row">${modeBadge}</div>
-      <p class="muted"><em>Results are heuristic/retrieval-based, not compiler-verified.</em></p>
-      ${categoryPills}
-      <div class="meta-grid">
-        ${meta(countLabel, String(gpuSearch.queriesRun ?? 0))}
-        ${meta('Total matches', String(gpuSearch.totalResults ?? 0))}
-      </div>
-      ${scanWarnings}
-      ${scanLimitations ? `<ul class="muted">${scanLimitations}</ul>` : ''}
-      ${resultItems ? `<div class="context-list">${resultItems}</div>` : '<p class="empty">No results returned.</p>'}
-    `,
-  );
-}
-
-function renderNextSteps(steps: string[]): string {
-  if (steps.length === 0) {
-    return renderSection('Recommended Next Steps', '<p class="empty">No recommendations generated.</p>');
-  }
-
-  return renderSection(
-    'Recommended Next Steps',
-    `<ul>${steps.map((s) => `<li>${escapeHtml(s)}</li>`).join('')}</ul>`,
-  );
-}
+// ============================================================
+// Report management
+// ============================================================
 
 async function loadReports(): Promise<void> {
-  reports.innerHTML = '<p class="muted">Loading saved reports...</p>';
   try {
     const items = await api<ReportSummary[]>('/api/reports');
-    reports.innerHTML = items.length
-      ? items.map(reportItem).join('')
-      : '<p class="empty">No saved reports yet. Run a review or audit to create one.</p>';
-    reports.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((button) => {
-      button.addEventListener('click', () => viewReport(button.dataset.view ?? '', button.dataset.viewType));
-    });
-    reports.querySelectorAll<HTMLButtonElement>('[data-delete]').forEach((button) => {
-      button.addEventListener('click', () => deleteReport(button.dataset.delete ?? ''));
-    });
-    reports.querySelectorAll<HTMLButtonElement>('[data-export]').forEach((button) => {
-      button.addEventListener('click', () => exportAuditReport(button.dataset.export ?? '', button.dataset.format ?? ''));
-    });
-  } catch (error) {
-    reports.innerHTML = `<p class="error">Could not load saved reports: ${escapeHtml(errorMessage(error))}</p>`;
+    allReports = items;
+    renderRailItems();
+  } catch {
+    const railItems = document.getElementById('railItems');
+    if (railItems) railItems.innerHTML = '<p style="padding:12px;color:var(--sev-high);font-size:var(--t-sm)">Could not load reports.</p>';
   }
 }
 
 async function viewReport(id: string, reportType?: string): Promise<void> {
-  await run('Loading report...', async () => {
+  await run('Loading report…', async () => {
     if (reportType === 'LegacyAudit') {
       const report = await api<LegacyAuditReport>(`/api/audit/reports/${encodeURIComponent(id)}`);
       renderAuditReport(report);
@@ -808,12 +677,15 @@ async function viewReport(id: string, reportType?: string): Promise<void> {
 }
 
 async function deleteReport(id: string): Promise<void> {
-  if (!window.confirm('Delete this saved report?')) {
-    return;
-  }
-
-  await run('Deleting report...', async () => {
+  if (!window.confirm('Delete this saved report?')) return;
+  await run('Deleting report…', async () => {
     await api(`/api/reports/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (activeReportId === id) {
+      activeReportId = null;
+      const reportArea = getElement('reportArea');
+      reportArea.className = 'empty-state';
+      reportArea.innerHTML = '<p>Run an audit, review, or analysis to see results.</p>';
+    }
     await loadReports();
     showToast('Report deleted.');
   });
@@ -824,14 +696,12 @@ async function exportAuditReport(id: string, format: string): Promise<void> {
     showToast('Export is unavailable for this report.', true);
     return;
   }
-
-  await run(`Exporting ${format}...`, async () => {
+  await run(`Exporting ${format}…`, async () => {
     const response = await fetch(`/api/audit/reports/${encodeURIComponent(id)}/export/${format}`);
     if (!response.ok) {
       const text = await response.text();
       throw new Error(text || `${response.status} ${response.statusText}`);
     }
-
     const blob = await response.blob();
     const fileName = fileNameFromDisposition(response.headers.get('content-disposition'))
       ?? `legacy-audit-${id}.${format === 'markdown' ? 'md' : 'html'}`;
@@ -848,13 +718,294 @@ async function exportAuditReport(id: string, format: string): Promise<void> {
 }
 
 function fileNameFromDisposition(disposition: string | null): string | null {
-  if (!disposition) {
-    return null;
-  }
-
+  if (!disposition) return null;
   const match = /filename\*?=(?:UTF-8''|")?([^";]+)/i.exec(disposition);
   return match ? decodeURIComponent(match[1].replaceAll('"', '').trim()) : null;
 }
+
+// ============================================================
+// Audit report rendering
+// ============================================================
+
+function renderAuditReport(report: LegacyAuditReport): void {
+  copyPayloads.clear();
+  const markdown = report.markdown ?? '';
+  registerCopy('audit-markdown', markdown);
+  activeReportId = report.reportId ?? null;
+
+  const reportArea = getElement('reportArea');
+  reportArea.className = 'report-shell';
+  reportArea.innerHTML = `
+    ${renderReportHead(report)}
+    ${renderMetricStrip(report)}
+    ${renderAuditSummarySection(report)}
+    ${renderTechnologySignals(report.technologySignals ?? [])}
+    ${renderArchitectureSignals(report.architectureSignals ?? [])}
+    ${renderAuditFindings(report.riskFindings ?? [])}
+    ${renderAuditRoslynSummary(report.roslynSummary ?? null)}
+    ${renderAuditDiSummary(report.dependencyInjectionSummary ?? null)}
+    ${renderAuditGpuSearchSummary(report.gpuSearchSummary ?? null)}
+    ${renderNextSteps(report.recommendedNextSteps ?? [])}
+    ${report.llmSummary ? renderAuditSection('LLM Summary', null, `<div class="llm-summary">${escapeHtml(report.llmSummary)}</div>`) : ''}
+    ${markdown ? renderRawMarkdown(markdown) : ''}
+  `;
+
+  reportArea.querySelectorAll<HTMLButtonElement>('[data-copy]').forEach((btn) => {
+    btn.addEventListener('click', () => void copyText(btn.dataset.copy ?? ''));
+  });
+  reportArea.querySelectorAll<HTMLButtonElement>('[data-export]').forEach((btn) => {
+    btn.addEventListener('click', () => void exportAuditReport(report.reportId ?? '', btn.dataset.format ?? ''));
+  });
+
+  document.querySelectorAll<HTMLElement>('.report-item').forEach((item) => {
+    item.classList.toggle('active', item.dataset.view === activeReportId);
+  });
+}
+
+function renderReportHead(report: LegacyAuditReport): string {
+  const id = report.reportId ?? '';
+  const date = report.generatedAtUtc ? shortDate(report.generatedAtUtc) : '—';
+  return `
+    <div class="report-head">
+      <div>
+        <p class="report-eyebrow">Legacy .NET Audit · Report</p>
+        <h1 class="report-title">${escapeHtml(repoTail(report.repoPath))}</h1>
+        <div class="report-subtitle">${escapeHtml(report.repoPath ?? '')} · id <code>${escapeHtml(id.slice(0, 8))}</code> · generated ${escapeHtml(date)}</div>
+      </div>
+      <div class="report-actions">
+        <button class="btn ghost sm" data-copy="audit-markdown">Copy Markdown</button>
+        <button class="btn ghost sm" data-export data-format="html">Export HTML</button>
+        <button class="btn ghost sm" data-export data-format="markdown">Export MD</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderMetricStrip(report: LegacyAuditReport): string {
+  const m = report.metrics;
+  const techCount = m?.technologySignals ?? report.technologySignals?.length ?? 0;
+  const riskCount = m?.riskFindings ?? report.riskFindings?.length ?? 0;
+  const findings = report.riskFindings ?? [];
+  const highCount = m?.highCount ?? findings.filter((f) => { const v = (f.severity ?? '').toLowerCase(); return v === 'high' || v === 'critical'; }).length;
+  const warnCount = m?.warningCount ?? findings.filter((f) => { const v = (f.severity ?? '').toLowerCase(); return v === 'warning' || v === 'medium'; }).length;
+  const infoCount = m?.infoCount ?? findings.filter((f) => (f.severity ?? '').toLowerCase() === 'info').length;
+  const gpuMatches = m?.gpuMatches ?? report.gpuSearchSummary?.totalResults ?? 0;
+  const gpuQueries = report.gpuSearchSummary?.queriesRun ?? 0;
+  const durationMs = m?.durationMs;
+
+  return `
+    <div class="metric-strip">
+      <div class="metric">
+        <div class="label">Repository</div>
+        <div class="value" style="font-size:14px;font-family:var(--font-mono);letter-spacing:0">${escapeHtml(repoTail(report.repoPath))}</div>
+      </div>
+      <div class="metric info">
+        <div class="label">Tech signals</div>
+        <div class="value">${techCount}<span class="sub">detected</span></div>
+      </div>
+      <div class="metric ${riskCount > 0 && highCount > 0 ? 'bad' : riskCount > 0 ? 'warn' : ''}">
+        <div class="label">Risk findings</div>
+        <div class="value">${riskCount}<span class="sub">${highCount}H · ${warnCount}W · ${infoCount}I</span></div>
+      </div>
+      <div class="metric">
+        <div class="label">gpu-search matches</div>
+        <div class="value">${gpuMatches}<span class="sub">${gpuQueries} queries</span></div>
+      </div>
+      <div class="metric">
+        <div class="label">Duration</div>
+        <div class="value">${durationMs != null ? (durationMs / 1000).toFixed(1) : '—'}<span class="sub">${durationMs != null ? 'seconds' : ''}</span></div>
+      </div>
+    </div>
+  `;
+}
+
+function renderAuditSummarySection(report: LegacyAuditReport): string {
+  const ws = report.workspaceSummary;
+  const wsMeta = ws?.selectedWorkspaceKind ? `workspace · ${ws.selectedWorkspaceKind}` : undefined;
+  const wsCallout = ws ? `
+    <div class="callout" style="margin-top:14px">
+      <div class="callout-icon">i</div>
+      <div>
+        <strong>Workspace resolved:</strong>
+        <span style="font-family:var(--font-mono);font-size:var(--t-sm);margin-left:6px">${escapeHtml(ws.selectedWorkspacePath ?? 'n/a')}</span>
+        <span style="color:var(--muted);margin-left:8px;font-size:var(--t-sm)">(${ws.totalCandidates ?? 0} candidates · ${ws.slnCount ?? 0} .sln · ${ws.csprojCount ?? 0} .csproj)</span>
+      </div>
+    </div>
+  ` : '';
+  return renderAuditSection('Summary', null, `
+    <p class="prose" style="margin-top:0">${escapeHtml(report.summary ?? '')}</p>
+    ${wsCallout}
+  `, wsMeta);
+}
+
+function renderTechnologySignals(signals: TechnologySignal[]): string {
+  if (signals.length === 0) {
+    return renderAuditSection('Technology signals', 0, '<p class="note">No signals detected.</p>');
+  }
+  const items = signals.map((s) => `
+    <article class="signal">
+      <div class="signal-icon">${escapeHtml(categoryGlyph(s.category ?? ''))}</div>
+      <div class="signal-body">
+        <div class="signal-meta">
+          <span class="badge category">${escapeHtml(s.category ?? 'Signal')}</span>
+          <span class="badge confidence">conf · ${escapeHtml(s.confidence ?? 'unknown')}</span>
+        </div>
+        <p class="signal-title">${escapeHtml(s.name ?? 'Signal')}</p>
+        ${s.filePath ? `<p class="signal-path">${escapeHtml(s.filePath)}</p>` : ''}
+        <p class="signal-evidence">${escapeHtml(s.evidence ?? '')}</p>
+      </div>
+    </article>
+  `).join('');
+  return renderAuditSection('Technology signals', signals.length, `<div class="signal-grid">${items}</div>`);
+}
+
+function renderArchitectureSignals(signals: ArchitectureSignal[]): string {
+  if (signals.length === 0) return '';
+  const items = signals.map((s) => `
+    <div style="display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:start;padding:4px 0">
+      <span class="badge confidence">conf · ${escapeHtml(s.confidence ?? 'unknown')}</span>
+      <div>
+        <p style="margin:0 0 4px;font-size:var(--t-base);font-weight:500">${escapeHtml(s.name ?? '')}</p>
+        <p class="prose" style="margin:0 0 4px">${escapeHtml(s.message ?? '')}</p>
+        <p style="margin:0;font-family:var(--font-mono);font-size:var(--t-xs);color:var(--muted)">${escapeHtml(s.evidence ?? '')}</p>
+      </div>
+    </div>
+  `).join('');
+  return renderAuditSection('Architecture signals', signals.length, items);
+}
+
+function renderAuditFindings(findings: AuditFinding[]): string {
+  if (findings.length === 0) {
+    return renderAuditSection('Risk findings', 0, '<p class="note">No risk findings.</p>');
+  }
+  const highCount = findings.filter((f) => { const v = (f.severity ?? '').toLowerCase(); return v === 'high' || v === 'critical'; }).length;
+  const warnCount = findings.filter((f) => { const v = (f.severity ?? '').toLowerCase(); return v === 'warning' || v === 'medium'; }).length;
+  const infoCount = findings.filter((f) => (f.severity ?? '').toLowerCase() === 'info').length;
+  const meta = `${highCount} high · ${warnCount} warning · ${infoCount} info`;
+  const rows = findings.map((f) => `
+    <tr>
+      <td class="col-sev"><span class="badge ${sevClass(f.severity)}">${sevLabel(f.severity ?? '')}</span></td>
+      <td class="col-code">${escapeHtml(f.code ?? '')}</td>
+      <td class="col-title">
+        <div>${escapeHtml(f.title ?? f.code ?? 'Finding')}</div>
+        <div class="desc">${escapeHtml(f.message ?? '')}</div>
+      </td>
+      <td class="col-loc">${f.filePath ? escapeHtml(f.filePath) + (f.line ? `:${f.line}` : '') : '—'}</td>
+    </tr>
+  `).join('');
+  return renderAuditSection('Risk findings', findings.length,
+    `<table class="finding-table"><thead><tr><th>Severity</th><th>Rule</th><th>Finding</th><th>Location</th></tr></thead><tbody>${rows}</tbody></table>`,
+    meta
+  );
+}
+
+function renderAuditRoslynSummary(roslyn: AuditRoslynSummary | null): string {
+  if (!roslyn) return renderAuditSection('Roslyn summary', null, '<p class="note">Roslyn analysis was not requested.</p>');
+
+  const meta = roslyn.workspaceLoaded ? 'compiler-aware' : 'workspace load failed';
+
+  if (!roslyn.workspaceLoaded) {
+    return renderAuditSection('Roslyn summary', null, `
+      <div class="callout warn">
+        <div class="callout-icon">!</div>
+        <div>
+          <strong>Roslyn workspace could not be loaded.</strong>
+          <div style="margin-top:4px;color:var(--muted);font-family:var(--font-mono);font-size:var(--t-xs)">Workspace · ${escapeHtml(roslyn.workspacePath ?? 'n/a')}</div>
+          ${roslyn.errorMessage ? `<div style="margin-top:6px;color:var(--ink-2)">${escapeHtml(roslyn.errorMessage)}</div>` : ''}
+        </div>
+      </div>
+      ${roslyn.warnings?.length ? detailsList('Warnings', roslyn.warnings) : ''}
+    `, meta);
+  }
+
+  return renderAuditSection('Roslyn summary', null, `
+    <div class="kv-grid">
+      ${kv('Workspace kind', roslyn.workspaceKind ?? 'n/a')}
+      ${kv('Projects', String(roslyn.projectCount ?? 0))}
+      ${kv('Documents', String(roslyn.documentCount ?? 0))}
+      ${kv('Symbols', String(roslyn.symbolCount ?? 0))}
+      ${kv('Classes', String(roslyn.classCount ?? 0))}
+      ${kv('Interfaces', String(roslyn.interfaceCount ?? 0))}
+      ${kv('Methods', String(roslyn.methodCount ?? 0))}
+      ${kv('Path', fileTail(roslyn.workspacePath ?? '', 36), true)}
+    </div>
+    ${roslyn.warnings?.length ? detailsList('Warnings', roslyn.warnings) : ''}
+  `, meta);
+}
+
+function renderAuditDiSummary(di: DiSummary | null): string {
+  if (!di) return renderAuditSection('Dependency injection summary', null, '<p class="note">DI analysis was not requested.</p>');
+
+  const lifetimes = di.registrationsByLifetime ?? {};
+  const lifetimeStr = `S ${lifetimes['Singleton'] ?? 0} · Sc ${lifetimes['Scoped'] ?? 0} · T ${lifetimes['Transient'] ?? 0}`;
+
+  const diFindings = (di.findings ?? []).map((f) => `
+    <tr>
+      <td class="col-sev"><span class="badge ${sevClass(f.severity)}">${sevLabel(f.severity ?? '')}</span></td>
+      <td class="col-code">${escapeHtml(f.code ?? '')}</td>
+      <td class="col-title"><div>${escapeHtml(f.message ?? '')}</div></td>
+      <td class="col-loc">${f.filePath ? escapeHtml(f.filePath) + (f.line ? `:${f.line}` : '') : '—'}</td>
+    </tr>
+  `).join('');
+
+  return renderAuditSection('Dependency injection summary', null, `
+    <div class="kv-grid">
+      ${kv('Registrations', String(di.registrationCount ?? 0))}
+      ${kv('Constructor deps', String(di.constructorDependencyCount ?? 0))}
+      ${kv('Findings', String(di.findingCount ?? 0))}
+      ${kv('By lifetime', lifetimeStr, true)}
+    </div>
+    ${di.findingCount === 0 ? `<p class="note" style="margin-top:10px">No IServiceCollection registrations detected. Expected for .NET Framework projects without modern DI.</p>` : ''}
+    ${diFindings ? `<table class="finding-table" style="margin-top:12px"><thead><tr><th>Sev</th><th>Rule</th><th>Finding</th><th>Location</th></tr></thead><tbody>${diFindings}</tbody></table>` : ''}
+  `, 'static · advisory');
+}
+
+function renderAuditGpuSearchSummary(gpuSearch: GpuSearchAuditSummary | null): string {
+  if (!gpuSearch) return renderAuditSection('gpu-search signal scan', null, '<p class="note">gpu-search was not requested.</p>');
+
+  if (!gpuSearch.wasAvailable) {
+    return renderAuditSection('gpu-search signal scan', null, `
+      <div class="callout warn">
+        <div class="callout-icon">!</div>
+        <div>
+          <strong>gpu-search was unavailable.</strong>
+          ${gpuSearch.errorMessage ? `<div style="margin-top:6px;color:var(--ink-2)">${escapeHtml(gpuSearch.errorMessage)}</div>` : ''}
+        </div>
+      </div>
+    `);
+  }
+
+  const modeMeta = `mode · ${gpuSearch.usedSignalScan ? 'scan/signals' : 'fallback'} · ${gpuSearch.queriesRun ?? 0} queries`;
+  const cats = (gpuSearch.signalCategories ?? []).map((c) => `<span class="cat-pill">${escapeHtml(c)}</span>`).join('');
+  const rows = (gpuSearch.results ?? []).map((r) => `
+    <div class="hit-row">
+      <div class="hit-query">${escapeHtml(r.query ?? '')}</div>
+      <div class="hit-detail">
+        <div class="hit-loc">${escapeHtml(r.filePath ?? '')}${r.line != null ? `<span class="line">:${r.line}</span>` : ''}</div>
+        <div class="hit-snippet">${escapeHtml(r.snippet ?? '')}</div>
+      </div>
+    </div>
+  `).join('');
+
+  return renderAuditSection('gpu-search signal scan', gpuSearch.totalResults ?? 0, `
+    <div class="hits">
+      ${cats ? `<div class="hits-cats">${cats}</div>` : ''}
+      ${rows}
+    </div>
+    <p class="note" style="margin-top:10px">Results are heuristic / retrieval-based and not compiler-verified. Showing top ${gpuSearch.results?.length ?? 0} of ${gpuSearch.totalResults ?? 0}.</p>
+  `, modeMeta);
+}
+
+function renderNextSteps(steps: string[]): string {
+  if (steps.length === 0) return renderAuditSection('Recommended next steps', 0, '<p class="note">No recommendations generated.</p>');
+  return renderAuditSection('Recommended next steps', steps.length,
+    `<ol class="steps">${steps.map((s) => `<li>${escapeHtml(s)}</li>`).join('')}</ol>`
+  );
+}
+
+// ============================================================
+// Diff review rendering
+// ============================================================
 
 function renderReport(report: ReviewReport): void {
   copyPayloads.clear();
@@ -864,93 +1015,93 @@ function renderReport(report: ReviewReport): void {
   const llmSummary = report.llmSummary ?? '';
 
   registerCopy('markdown', markdown);
-  if (context) {
-    registerCopy('context', JSON.stringify(context, null, 2));
-  }
-  if (llmSummary) {
-    registerCopy('llm', llmSummary);
-  }
+  if (context) registerCopy('context', JSON.stringify(context, null, 2));
+  if (llmSummary) registerCopy('llm', llmSummary);
 
-  output.innerHTML = `
-    <article class="viewer">
-      <header class="viewer-header">
-        <div>
-          <p class="eyebrow">Review report</p>
-          <h2>${escapeHtml(reportTitle(report))}</h2>
-        </div>
-        <div class="actions compact">
-          <button class="ghost small" data-copy="markdown">Copy Markdown</button>
-          ${context ? '<button class="ghost small" data-copy="context">Copy gpu-search context</button>' : ''}
-          ${llmSummary ? '<button class="ghost small" data-copy="llm">Copy LLM summary</button>' : ''}
-        </div>
-      </header>
-      ${renderSummary(report)}
-      ${renderFindings(report.findings ?? [])}
-      ${renderGpuSearchContext(context)}
-      ${renderRoslynContext(roslynCtx)}
-      ${llmSummary ? renderSection('LLM Summary', `<div class="llm-summary">${escapeHtml(llmSummary)}</div>`) : ''}
-      ${renderRawMarkdown(markdown)}
-    </article>
+  activeReportId = report.reportId ?? report.id ?? null;
+
+  const reportArea = getElement('reportArea');
+  reportArea.className = 'report-shell';
+  const id = report.reportId ?? report.id ?? 'report';
+  const generated = report.generatedAtUtc ?? report.createdAtUtc ?? report.createdAt;
+
+  reportArea.innerHTML = `
+    <div class="report-head">
+      <div>
+        <p class="report-eyebrow">Diff Review · Report</p>
+        <h1 class="report-title">${escapeHtml(repoTail(report.repoPath))}</h1>
+        <div class="report-subtitle">${escapeHtml(report.repoPath ?? '')} · id <code>${escapeHtml(id.slice(0, 8))}</code> · ${generated ? shortDate(generated) : '—'}</div>
+      </div>
+      <div class="report-actions">
+        <button class="btn ghost sm" data-copy="markdown">Copy Markdown</button>
+        ${context ? '<button class="btn ghost sm" data-copy="context">Copy gpu-search context</button>' : ''}
+        ${llmSummary ? '<button class="btn ghost sm" data-copy="llm">Copy LLM summary</button>' : ''}
+      </div>
+    </div>
+    ${renderReviewSummary(report)}
+    ${renderFindings(report.findings ?? [])}
+    ${renderGpuSearchContext(context)}
+    ${renderRoslynContext(roslynCtx)}
+    ${llmSummary ? renderAuditSection('LLM Summary', null, `<div class="llm-summary">${escapeHtml(llmSummary)}</div>`) : ''}
+    ${markdown ? renderRawMarkdown(markdown) : ''}
   `;
 
-  output.querySelectorAll<HTMLButtonElement>('[data-copy]').forEach((button) => {
-    button.addEventListener('click', () => copyText(button.dataset.copy ?? ''));
+  reportArea.querySelectorAll<HTMLButtonElement>('[data-copy]').forEach((btn) => {
+    btn.addEventListener('click', () => void copyText(btn.dataset.copy ?? ''));
+  });
+
+  document.querySelectorAll<HTMLElement>('.report-item').forEach((item) => {
+    item.classList.toggle('active', item.dataset.view === activeReportId);
   });
 }
 
-function renderSummary(report: ReviewReport): string {
+function renderReviewSummary(report: ReviewReport): string {
   const generated = report.generatedAtUtc ?? report.createdAtUtc ?? report.createdAt;
-  return renderSection(
-    'Summary',
-    `
-      <div class="meta-grid">
-        ${meta('Repository', report.repoPath)}
-        ${meta('Created', generated ? formatDate(generated) : undefined)}
-        ${meta('Changed files', String(report.changedFileCount ?? report.files?.length ?? 'n/a'))}
-        ${meta('Provider / mode', report.providerName ?? report.llmProvider ?? report.reviewMode ?? report.analysisMode)}
-      </div>
-    `,
-  );
+  return renderAuditSection('Summary', null, `
+    <div class="kv-grid">
+      ${kv('Repository', report.repoPath ?? 'n/a')}
+      ${kv('Created', generated ? formatDate(generated) : 'n/a')}
+      ${kv('Changed files', String(report.changedFileCount ?? report.files?.length ?? 'n/a'))}
+      ${kv('Provider / mode', report.providerName ?? report.llmProvider ?? report.reviewMode ?? report.analysisMode ?? 'n/a')}
+    </div>
+  `);
 }
 
 function renderFindings(findings: ReviewFinding[]): string {
   if (findings.length === 0) {
-    return renderSection('Findings', '<p class="empty">No findings returned.</p>');
+    return renderAuditSection('Findings', 0, '<p class="note">No findings returned.</p>');
   }
-
-  return renderSection(
-    'Findings',
-    `<div class="finding-list">${findings.map(renderFinding).join('')}</div>`,
+  const highCount = findings.filter((f) => { const v = (f.severity ?? '').toLowerCase(); return v === 'high' || v === 'critical'; }).length;
+  const warnCount = findings.filter((f) => { const v = (f.severity ?? '').toLowerCase(); return v === 'warning' || v === 'medium'; }).length;
+  const infoCount = findings.filter((f) => (f.severity ?? '').toLowerCase() === 'info').length;
+  const meta = `${highCount} high · ${warnCount} warning · ${infoCount} info`;
+  const rows = findings.map((f) => {
+    const loc = f.path ?? f.filePath;
+    const line = formatLineRange(f);
+    return `
+      <tr>
+        <td class="col-sev"><span class="badge ${sevClass(f.severity)}">${sevLabel(f.severity ?? '')}</span></td>
+        <td class="col-code">${escapeHtml(f.ruleId ?? '')}${f.category ? `<div style="margin-top:2px;color:var(--subtle)">${escapeHtml(f.category)}</div>` : ''}</td>
+        <td class="col-title">
+          <div>${escapeHtml(f.title ?? f.message ?? 'Finding')}</div>
+          ${f.description ? `<div class="desc">${escapeHtml(f.description)}</div>` : ''}
+        </td>
+        <td class="col-loc">${loc ? escapeHtml(loc) + (line ? ':' + escapeHtml(line) : '') : '—'}</td>
+      </tr>
+    `;
+  }).join('');
+  return renderAuditSection('Findings', findings.length,
+    `<table class="finding-table"><thead><tr><th>Severity</th><th>Rule</th><th>Finding</th><th>Location</th></tr></thead><tbody>${rows}</tbody></table>`,
+    meta
   );
 }
 
-function renderFinding(finding: ReviewFinding): string {
-  const severity = normalizeSeverity(finding.severity);
-  const location = finding.path ?? finding.filePath;
-  const line = formatLineRange(finding);
-  return `
-    <article class="finding-card">
-      <div class="row">
-        <span class="badge severity-${severity.toLowerCase()}">${severity}</span>
-        ${finding.category ? `<span class="badge">${escapeHtml(finding.category)}</span>` : ''}
-        ${finding.ruleId ? `<span class="muted mono">${escapeHtml(finding.ruleId)}</span>` : ''}
-      </div>
-      <h3>${escapeHtml(finding.title ?? finding.message ?? 'Review finding')}</h3>
-      ${location ? `<p class="mono muted">${escapeHtml(location)}${line ? `:${escapeHtml(line)}` : ''}</p>` : ''}
-      ${finding.description ? `<p>${escapeHtml(finding.description)}</p>` : ''}
-    </article>
-  `;
-}
-
 function renderGpuSearchContext(context: GpuSearchContext | null): string {
-  if (!context) {
-    return renderSection('gpu-search Context', '<p class="empty">No gpu-search context was included in this report.</p>');
-  }
+  if (!context) return renderAuditSection('gpu-search Context', null, '<p class="note">No gpu-search context was included in this report.</p>');
 
   if (context.wasAvailable === false) {
-    return renderSection(
-      'gpu-search Context',
-      `<p class="error">gpu-search unavailable: ${escapeHtml(context.unavailableReason ?? 'No reason provided.')}</p>`,
+    return renderAuditSection('gpu-search Context', null,
+      `<div class="callout warn"><div class="callout-icon">!</div><div><strong>gpu-search unavailable:</strong> ${escapeHtml(context.unavailableReason ?? 'No reason provided.')}</div></div>`
     );
   }
 
@@ -958,9 +1109,9 @@ function renderGpuSearchContext(context: GpuSearchContext | null): string {
   const limitations = context.limitations?.length ? detailsList('Global limitations', context.limitations) : '';
   const files = context.files?.length
     ? context.files.map(renderChangedFileContext).join('')
-    : '<p class="empty">No per-file gpu-search context returned.</p>';
+    : '<p class="note">No per-file gpu-search context returned.</p>';
 
-  return renderSection('gpu-search Context', `${warnings}${limitations}<div class="context-list">${files}</div>`);
+  return renderAuditSection('gpu-search Context', context.files?.length ?? null, `${warnings}${limitations}<div class="context-list">${files}</div>`);
 }
 
 function renderChangedFileContext(file: ChangedFileContext): string {
@@ -973,132 +1124,228 @@ function renderChangedFileContext(file: ChangedFileContext): string {
 
   return `
     <article class="context-card">
-      <div class="row">
-        <h3 class="mono">${escapeHtml(file.filePath ?? file.path ?? 'Unknown file')}</h3>
-        <div class="actions compact">
-          ${badge(impact?.confidence ?? file.confidence, 'confidence')}
-          ${badge(impact?.analysisMode ?? file.analysisMode, 'mode')}
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:6px">
+        <h4 style="margin:0;font-family:var(--font-mono);font-size:var(--t-sm);color:var(--ink);word-break:break-all">${escapeHtml(file.filePath ?? file.path ?? 'Unknown file')}</h4>
+        <div style="display:flex;gap:4px;flex-shrink:0">
+          ${impact?.confidence ?? file.confidence ? `<span class="badge confidence">${escapeHtml(impact?.confidence ?? file.confidence ?? '')}</span>` : ''}
+          ${impact?.analysisMode ?? file.analysisMode ? `<span class="badge">${escapeHtml(impact?.analysisMode ?? file.analysisMode ?? '')}</span>` : ''}
         </div>
       </div>
-      ${file.error ? `<p class="error">${escapeHtml(file.error)}</p>` : ''}
-      <p class="muted">${escapeHtml(impact?.summary ?? dependencySummary(impact, impactedFiles))}</p>
+      ${file.error ? `<p class="error" style="font-size:var(--t-sm)">${escapeHtml(file.error)}</p>` : ''}
+      <p style="font-size:var(--t-sm);color:var(--muted);margin:0 0 8px">${escapeHtml(impact?.summary ?? dependencySummary(impact, impactedFiles))}</p>
       ${impactedFiles.length ? impactedFilesBlock(impactedFiles) : ''}
       ${warnings.length ? detailsList('Warnings', warnings) : ''}
       ${limitations.length ? detailsList('Limitations', limitations) : ''}
       ${renderRelatedResults(file.relatedResults ?? [])}
-      ${
-        skeletonContent
-          ? `<details><summary>Skeleton preview${typeof skeleton === 'object' && skeleton?.language ? ` · ${escapeHtml(skeleton.language)}` : ''}</summary><pre>${escapeHtml(skeletonContent)}</pre></details>`
-          : ''
-      }
+      ${skeletonContent
+        ? `<details><summary>Skeleton preview${typeof skeleton === 'object' && skeleton?.language ? ` · ${escapeHtml(skeleton.language)}` : ''}</summary><pre>${escapeHtml(skeletonContent)}</pre></details>`
+        : ''}
     </article>
   `;
 }
 
 function renderRelatedResults(results: RelatedCodeResult[]): string {
-  if (results.length === 0) {
-    return '<p class="muted">No related search results.</p>';
-  }
-
+  if (results.length === 0) return '';
   return `
-    <div class="related-list">
+    <div class="related-list" style="margin-top:8px">
       <h4>Related search results</h4>
-      ${results
-        .map(
-          (result) => `
-            <article class="related-card">
-              <div class="row">
-                <strong class="mono">${escapeHtml(result.file ?? result.filePath ?? 'Unknown file')}${formatLineRange(result) ? `:${escapeHtml(formatLineRange(result))}` : ''}</strong>
-                <span class="badge">${escapeHtml(result.engine ?? 'search')}${result.score !== null && result.score !== undefined ? ` · ${result.score.toFixed(2)}` : ''}</span>
-              </div>
-              ${result.reason ? `<p class="muted">${escapeHtml(result.reason)}</p>` : ''}
-              ${result.snippet ? `<pre>${escapeHtml(result.snippet)}</pre>` : ''}
-            </article>
-          `,
-        )
-        .join('')}
+      ${results.map((result) => `
+        <article class="related-card">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px">
+            <strong style="font-family:var(--font-mono);font-size:var(--t-sm)">${escapeHtml(result.file ?? result.filePath ?? 'Unknown')}${formatLineRange(result) ? `:${escapeHtml(formatLineRange(result))}` : ''}</strong>
+            <span class="badge">${escapeHtml(result.engine ?? 'search')}${result.score != null ? ` · ${result.score.toFixed(2)}` : ''}</span>
+          </div>
+          ${result.reason ? `<p style="font-size:var(--t-xs);color:var(--muted);margin:0 0 4px">${escapeHtml(result.reason)}</p>` : ''}
+          ${result.snippet ? `<pre>${escapeHtml(result.snippet)}</pre>` : ''}
+        </article>
+      `).join('')}
     </div>
   `;
 }
 
 function renderRoslynContext(context: RoslynReviewContext | null): string {
-  if (!context) {
-    return '';
-  }
+  if (!context) return '';
 
   if (!context.success || (!context.changedSymbols?.length && context.errorMessage)) {
-    return renderSection(
-      'Roslyn Reference Context',
-      `<p class="error">Roslyn reference analysis was unavailable. Review continued with deterministic and gpu-search context.</p>
-       ${context.errorMessage ? `<p class="muted">${escapeHtml(context.errorMessage)}</p>` : ''}`,
-    );
+    return renderAuditSection('Roslyn Reference Context', null, `
+      <div class="callout warn">
+        <div class="callout-icon">!</div>
+        <div>
+          <strong>Roslyn reference analysis was unavailable.</strong>
+          ${context.errorMessage ? `<div style="margin-top:6px;color:var(--ink-2)">${escapeHtml(context.errorMessage)}</div>` : ''}
+        </div>
+      </div>
+    `);
   }
 
   const symbols = context.changedSymbols ?? [];
-  if (symbols.length === 0) {
-    return renderSection('Roslyn Reference Context', '<p class="empty">No changed C# symbols were matched.</p>');
-  }
+  if (symbols.length === 0) return renderAuditSection('Roslyn Reference Context', 0, '<p class="note">No changed C# symbols were matched.</p>');
 
   const allRefs = context.symbolReferences ?? [];
-  const symbolCards = symbols
-    .map((symbol) => {
-      const refs = allRefs.filter(
-        (r) => r.symbolName === symbol.name && r.symbolFullName === symbol.fullName && !r.isDefinition,
-      );
-      const refRows = refs
-        .slice(0, 10)
-        .map((r) => {
-          const container = r.containingSymbol ? ` <span class="muted">— in ${escapeHtml(r.containingSymbol)}</span>` : '';
-          return `<li class="mono">${escapeHtml(r.filePath ?? '')}:${r.line ?? '?'}${container}</li>`;
-        })
-        .join('');
+  const symbolCards = symbols.map((symbol) => {
+    const refs = allRefs.filter((r) => r.symbolName === symbol.name && r.symbolFullName === symbol.fullName && !r.isDefinition);
+    const refRows = refs.slice(0, 10).map((r) => {
+      const container = r.containingSymbol ? ` <span style="color:var(--muted)">— in ${escapeHtml(r.containingSymbol)}</span>` : '';
+      return `<li style="font-family:var(--font-mono);font-size:var(--t-xs)">${escapeHtml(r.filePath ?? '')}:${r.line ?? '?'}${container}</li>`;
+    }).join('');
 
-      return `
-        <article class="context-card">
-          <div class="row">
-            <h3 class="mono">${escapeHtml(symbol.name ?? 'Unknown')}</h3>
-            <span class="badge">${escapeHtml(symbol.kind ?? 'symbol')}</span>
-          </div>
-          <div class="meta-grid">
-            ${meta('Project', symbol.projectName)}
-            ${meta('Definition', symbol.filePath ? `${symbol.filePath}:${symbol.line ?? '?'}` : undefined)}
-            ${meta('References', String(refs.length))}
-          </div>
-          ${refs.length ? `<div class="mini-block"><h4>References</h4><ul>${refRows}</ul></div>` : ''}
-        </article>
-      `;
-    })
-    .join('');
+    return `
+      <article class="context-card">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="font-family:var(--font-mono);font-size:var(--t-sm);font-weight:600">${escapeHtml(symbol.name ?? 'Unknown')}</span>
+          <span class="badge">${escapeHtml(symbol.kind ?? 'symbol')}</span>
+        </div>
+        <div class="kv-grid">
+          ${kv('Project', symbol.projectName ?? 'n/a')}
+          ${kv('Definition', symbol.filePath ? `${symbol.filePath}:${symbol.line ?? '?'}` : 'n/a')}
+          ${kv('References', String(refs.length))}
+        </div>
+        ${refs.length ? `<div class="mini-block"><h4>References</h4><ul>${refRows}</ul></div>` : ''}
+      </article>
+    `;
+  }).join('');
 
   const warnings = context.warnings?.length ? detailsList('Warnings', context.warnings) : '';
-  const workspaceInfo =
-    context.workspacePath
-      ? `<p class="muted mono">${escapeHtml(context.workspacePath)}${context.workspaceKind ? ` (${escapeHtml(context.workspaceKind)})` : ''}</p>`
-      : '';
+  const workspaceInfo = context.workspacePath
+    ? `<p style="font-family:var(--font-mono);font-size:var(--t-xs);color:var(--muted);margin:0 0 12px">${escapeHtml(context.workspacePath)}${context.workspaceKind ? ` (${escapeHtml(context.workspaceKind)})` : ''}</p>`
+    : '';
 
-  return renderSection(
-    'Roslyn Reference Context',
-    `${workspaceInfo}${warnings}<div class="context-list">${symbolCards}</div>`,
-  );
+  return renderAuditSection('Roslyn Reference Context', symbols.length, `${workspaceInfo}${warnings}<div class="context-list">${symbolCards}</div>`);
 }
 
 function renderRawMarkdown(markdown: string): string {
   return `
-    <details class="raw-markdown">
-      <summary>Raw Markdown</summary>
-      <pre>${escapeHtml(markdown || 'No Markdown returned.')}</pre>
-    </details>
+    <div class="section">
+      <details>
+        <summary>Raw Markdown</summary>
+        <pre style="margin-top:8px">${escapeHtml(markdown || 'No Markdown returned.')}</pre>
+      </details>
+    </div>
   `;
 }
 
+// ============================================================
+// Rail item rendering
+// ============================================================
+
+function reportItem(report: ReportSummary): string {
+  const id = report.reportId ?? report.id ?? '';
+  const type = report.reportType ?? 'DiffReview';
+  const isAudit = type === 'LegacyAudit';
+  const typeClass = isAudit ? 'audit' : 'review';
+  const typeLabel = isAudit ? 'audit' : 'review';
+  const repoLabel = (() => {
+    const p = report.repoPath ?? '';
+    const parts = p.replace(/\\/g, '/').split('/').filter(Boolean);
+    return parts.length >= 2 ? parts.slice(-2).join('\\') : p;
+  })();
+  const ts = report.generatedAtUtc ?? report.createdAtUtc ?? '';
+  const findingCount = report.findingCount ?? (report as ReportSummary & { findings?: number }).findings;
+  const fileCount = report.changedFileCount;
+  const provider = report.llmProvider ?? report.providerName ?? '—';
+  const isActive = id === activeReportId;
+
+  return `
+    <div class="report-item ${isActive ? 'active' : ''}" data-view="${escapeHtml(id)}" data-view-type="${escapeHtml(type)}">
+      <div class="item-top">
+        <span class="item-type ${typeClass}">${typeLabel}</span>
+        <span class="item-time">${ts ? relTime(ts) : '—'}</span>
+      </div>
+      <div class="item-repo">${escapeHtml(repoLabel)}</div>
+      <div class="item-bot">
+        ${findingCount != null ? `<span>${findingCount} findings</span><span class="dot-sep">·</span>` : ''}
+        ${fileCount != null ? `<span>${fileCount.toLocaleString()} files</span><span class="dot-sep">·</span>` : ''}
+        <span>llm · ${escapeHtml(provider)}</span>
+        <span style="margin-left:auto;display:flex;gap:4px">
+          ${isAudit ? `<button class="btn ghost sm" data-export="${escapeHtml(id)}" data-format="html" style="padding:0 6px;height:20px;font-size:10px">HTML</button>` : ''}
+          <button class="btn danger sm" data-delete="${escapeHtml(id)}" style="padding:0 6px;height:20px;font-size:10px">Del</button>
+        </span>
+      </div>
+    </div>
+  `;
+}
+
+// ============================================================
+// Utilities
+// ============================================================
+
+function renderAuditSection(title: string, count: number | null | undefined, content: string, sectionMeta?: string): string {
+  const countHtml = count != null ? `<span style="color:var(--subtle);margin-left:8px;font-weight:500">· ${count}</span>` : '';
+  const metaHtml = sectionMeta ? `<span class="head-meta">${escapeHtml(sectionMeta)}</span>` : '';
+  return `
+    <section class="section">
+      <div class="section-head">
+        <h3>${escapeHtml(title)}${countHtml}</h3>
+        ${metaHtml}
+      </div>
+      ${content}
+    </section>
+  `;
+}
+
+function kv(label: string, value: string, mono = false): string {
+  return `<div class="kv"><div class="label">${escapeHtml(label)}</div><div class="value${mono ? ' mono' : ''}">${escapeHtml(value)}</div></div>`;
+}
+
+function relTime(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(ms / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+function shortDate(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleString('en-US', { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+function repoTail(path?: string): string {
+  if (!path) return 'Unknown repository';
+  const parts = path.replace(/\\/g, '/').split('/').filter(Boolean);
+  return parts[parts.length - 1] ?? path;
+}
+
+function fileTail(p: string, max = 60): string {
+  if (!p) return '';
+  if (p.length <= max) return p;
+  return '…' + p.slice(p.length - max);
+}
+
+function categoryGlyph(cat: string): string {
+  const m: Record<string, string> = {
+    Framework: 'FW', Dependencies: 'PK', Configuration: 'CF',
+    Quality: 'QA', Architecture: 'AR', Security: 'SE', Database: 'DB',
+  };
+  return m[cat] ?? (cat ? cat.slice(0, 2).toUpperCase() : '··');
+}
+
+function sevClass(s?: string): string {
+  const v = (s ?? '').toLowerCase();
+  if (v === 'high' || v === 'critical') return 'sev-high';
+  if (v === 'warning' || v === 'medium') return 'sev-warning';
+  if (v === 'info' || v === 'low') return 'sev-info';
+  if (v === 'ok' || v === 'success') return 'sev-ok';
+  return 'sev-info';
+}
+
+function sevLabel(s: string): string {
+  if (!s) return '—';
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+}
+
 async function run(label: string, action: () => Promise<void>): Promise<void> {
-  setStatus(label);
+  const runButton = document.getElementById('runButton') as HTMLButtonElement | null;
+  const savedHtml = runButton?.innerHTML ?? '';
+  if (runButton) { runButton.disabled = true; runButton.textContent = label; }
   try {
     await action();
-    setStatus('Ready');
   } catch (error) {
-    setStatus('Error');
     showToast(errorMessage(error), true);
+  } finally {
+    if (runButton) { runButton.disabled = false; runButton.innerHTML = savedHtml; }
   }
 }
 
@@ -1107,78 +1354,20 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
     headers: { 'Content-Type': 'application/json', ...init?.headers },
     ...init,
   });
-
   if (!response.ok) {
     const text = await response.text();
     throw new Error(text || `${response.status} ${response.statusText}`);
   }
-
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
+  if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
 
-function reportItem(report: ReportSummary): string {
-  const id = report.reportId ?? report.id ?? '';
-  const type = report.reportType ?? 'DiffReview';
-  const isAudit = type === 'LegacyAudit';
-  const typeBadge = isAudit
-    ? '<span class="badge badge-success" style="font-size:0.68rem">Legacy Audit</span>'
-    : '<span class="badge" style="font-size:0.68rem">Diff Review</span>';
-  const meta = isAudit
-    ? `${formatDate(report.generatedAtUtc ?? report.createdAtUtc)} · ${escapeHtml(report.llmProvider ?? 'Deterministic')}`
-    : `${formatDate(report.generatedAtUtc ?? report.createdAtUtc)} · ${report.changedFileCount ?? 'n/a'} files · ${escapeHtml(report.llmProvider ?? report.providerName ?? 'n/a')}`;
+function detailsList(title: string, rows: string[]): string {
   return `
-    <article class="report">
-      <div>
-        <strong>${escapeHtml(report.repoPath ?? 'Unknown repository')}</strong>
-        <span>${typeBadge} ${meta}</span>
-      </div>
-      <div class="actions compact">
-        <button class="ghost small" data-view="${escapeHtml(id)}" data-view-type="${escapeHtml(type)}">View</button>
-        ${isAudit ? `<button class="ghost small" data-export="${escapeHtml(id)}" data-format="markdown">Export Markdown</button>` : ''}
-        ${isAudit ? `<button class="ghost small" data-export="${escapeHtml(id)}" data-format="html">Export HTML</button>` : ''}
-        <button class="danger small" data-delete="${escapeHtml(id)}">Delete</button>
-      </div>
-    </article>
-  `;
-}
-
-function card(title: string, rows: string[]): string {
-  return `
-    <div class="result-card">
-      <h3>${escapeHtml(title)}</h3>
+    <details>
+      <summary>${escapeHtml(title)} (${rows.length})</summary>
       <ul>${rows.map((row) => `<li>${escapeHtml(row)}</li>`).join('')}</ul>
-    </div>
-  `;
-}
-
-function renderSection(title: string, content: string): string {
-  return `
-    <section class="viewer-section">
-      <h2>${escapeHtml(title)}</h2>
-      ${content}
-    </section>
-  `;
-}
-
-function meta(label: string, value?: string | null): string {
-  return `
-    <div class="meta-item">
-      <span>${escapeHtml(label)}</span>
-      <strong>${escapeHtml(value || 'n/a')}</strong>
-    </div>
-  `;
-}
-
-function listBlock(title: string, rows: string[]): string {
-  return `
-    <div class="mini-block">
-      <h4>${escapeHtml(title)}</h4>
-      <ul>${rows.map((row) => `<li class="mono">${escapeHtml(row)}</li>`).join('')}</ul>
-    </div>
+    </details>
   `;
 }
 
@@ -1187,14 +1376,12 @@ function impactedFilesBlock(files: ImpactedFile[]): string {
     <div class="mini-block">
       <h4>Impacted files</h4>
       <ul>
-        ${files
-          .map((file) => {
-            const path = file.file ?? file.filePath ?? file.path ?? 'Unknown file';
-            const hops = file.hops !== null && file.hops !== undefined ? ` · ${file.hops} hop${file.hops === 1 ? '' : 's'}` : '';
-            const reason = file.reason ? ` <span class="reason">— ${escapeHtml(file.reason)} <em>(heuristic)</em></span>` : '';
-            return `<li class="mono">${escapeHtml(path)}${hops}${reason}</li>`;
-          })
-          .join('')}
+        ${files.map((file) => {
+          const path = file.file ?? file.filePath ?? file.path ?? 'Unknown file';
+          const hops = file.hops != null ? ` · ${file.hops} hop${file.hops === 1 ? '' : 's'}` : '';
+          const reason = file.reason ? ` <span style="color:var(--muted)">— ${escapeHtml(file.reason)} <em>(heuristic)</em></span>` : '';
+          return `<li style="font-family:var(--font-mono);font-size:var(--t-xs)">${escapeHtml(path)}${hops}${reason}</li>`;
+        }).join('')}
       </ul>
     </div>
   `;
@@ -1207,79 +1394,32 @@ function normalizeImpactedFiles(
   if (Array.isArray(impactedFiles) && impactedFiles.length > 0) {
     return impactedFiles.map((file) => (typeof file === 'string' ? { file, hops: 1 } : file));
   }
-
   return (directImporters ?? []).map((file) => ({ file, hops: 1 }));
 }
 
-function detailsList(title: string, rows: string[]): string {
-  return `
-    <details>
-      <summary>${escapeHtml(title)} (${rows.length})</summary>
-      <ul>${rows.map((row) => `<li>${escapeHtml(row)}</li>`).join('')}</ul>
-    </details>
-  `;
-}
-
-function badge(value?: string | null, className = ''): string {
-  return value ? `<span class="badge ${className}">${escapeHtml(value)}</span>` : '';
-}
-
-function formatFile(file: GitDiffFile): string {
-  return `${file.status ?? 'M'} ${file.path ?? file.filePath ?? 'Unknown file'} (+${file.additions ?? 0}/-${file.deletions ?? 0})`;
-}
-
-function dependencySummary(impact: DependencyImpactSummary | null | undefined, impactedFiles: string[]): string {
-  if (!impact) {
-    return 'No dependency impact summary returned.';
-  }
-
+function dependencySummary(impact: DependencyImpactSummary | null | undefined, impactedFiles: ImpactedFile[]): string {
+  if (!impact) return 'No dependency impact summary returned.';
   const total = impact.totalImpacted ?? impactedFiles.length;
   return `${total} impacted file(s) identified.`;
-}
-
-function reportTitle(report: ReviewReport): string {
-  return report.reportId ?? report.id ?? 'Review report';
 }
 
 function formatLineRange(value: { line?: number | null; lineStart?: number | null; lineEnd?: number | null }): string {
   if (value.lineStart && value.lineEnd) {
     return value.lineStart === value.lineEnd ? String(value.lineStart) : `${value.lineStart}-${value.lineEnd}`;
   }
-
-  if (value.lineStart) {
-    return String(value.lineStart);
-  }
-
+  if (value.lineStart) return String(value.lineStart);
   return value.line ? String(value.line) : '';
 }
 
-function normalizeSeverity(value?: string): string {
-  const normalized = (value ?? 'Info').toLowerCase();
-  if (['low', 'medium', 'high', 'critical'].includes(normalized)) {
-    return normalized[0].toUpperCase() + normalized.slice(1);
-  }
-
-  return 'Info';
-}
-
 function registerCopy(key: string, value: string): void {
-  if (value) {
-    copyPayloads.set(key, value);
-  }
+  if (value) copyPayloads.set(key, value);
 }
 
 async function copyText(key: string): Promise<void> {
   const value = copyPayloads.get(key);
-  if (!value) {
-    showToast('Nothing to copy.', true);
-    return;
-  }
-
+  if (!value) { showToast('Nothing to copy.', true); return; }
   try {
-    if (!navigator.clipboard) {
-      throw new Error('Clipboard API is not available.');
-    }
-
+    if (!navigator.clipboard) throw new Error('Clipboard API is not available.');
     await navigator.clipboard.writeText(value);
     showToast('Copied.');
   } catch (error) {
@@ -1293,39 +1433,24 @@ function bind(id: string, handler: () => void | Promise<void>): void {
 
 function getInput(id: string): HTMLInputElement {
   const element = document.getElementById(id);
-  if (!(element instanceof HTMLInputElement)) {
-    throw new Error(`${id} input was not found.`);
-  }
-
+  if (!(element instanceof HTMLInputElement)) throw new Error(`${id} input was not found.`);
   return element;
 }
 
 function getElement(id: string): HTMLElement {
   const element = document.getElementById(id);
-  if (!element) {
-    throw new Error(`${id} element was not found.`);
-  }
-
+  if (!element) throw new Error(`${id} element was not found.`);
   return element;
-}
-
-function setStatus(value: string): void {
-  statusPill.textContent = value;
 }
 
 function showToast(message: string, isError = false): void {
   toast.textContent = message;
   toast.className = isError ? 'toast show error' : 'toast show';
-  window.setTimeout(() => {
-    toast.className = 'toast';
-  }, 2600);
+  window.setTimeout(() => { toast.className = 'toast'; }, 2600);
 }
 
 function formatDate(value?: string): string {
-  if (!value) {
-    return 'n/a';
-  }
-
+  if (!value) return 'n/a';
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }

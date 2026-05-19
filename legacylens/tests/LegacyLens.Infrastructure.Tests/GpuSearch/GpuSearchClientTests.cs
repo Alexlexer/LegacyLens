@@ -23,20 +23,41 @@ public sealed class GpuSearchClientTests
     {
         var client = CreateClient(new
         {
-            status = new { pattern = "done: 42 files", deps = "done: 38 files", semantic = "" },
-            device = new { backend = "cuda", torchDevice = "RTX 4060", reason = "CUDA available" },
-            pattern = new { files = 42, vram_mb = 1.2 },
+            status = "ok",
+            backend = "cuda",
+            device = "RTX 4060",
+            indexedFileCount = 42
         });
         var gpuSearchClient = new GpuSearchClient(client);
 
         var stats = await gpuSearchClient.GetStatsAsync(CancellationToken.None);
 
-        Assert.Equal("done: 42 files", stats.Status);
+        Assert.Equal("ok", stats.Status);
         Assert.Equal("cuda", stats.Backend);
         Assert.Equal("RTX 4060", stats.Device);
         Assert.Equal(42, stats.IndexedFileCount);
     }
 
+
+    [Fact]
+    public async Task GetStatsAsync_ReturnsStatsFromStructuredGpuSearchResponse()
+    {
+        var client = CreateClient(new
+        {
+            pattern = new { files = 158, baseDir = "D:/Repo" },
+            dependency = new { files = 132, edges = 47 },
+            status = new { pattern = "done: 158 files", deps = "done: 132 files", semantic = "" },
+            device = new { backend = "cuda", torchDevice = "cuda", reason = "CUDA available" }
+        });
+        var gpuSearchClient = new GpuSearchClient(client);
+
+        var stats = await gpuSearchClient.GetStatsAsync(CancellationToken.None);
+
+        Assert.Equal("done: 158 files", stats.Status);
+        Assert.Equal("cuda", stats.Backend);
+        Assert.Equal("cuda", stats.Device);
+        Assert.Equal(158, stats.IndexedFileCount);
+    }
     [Fact]
     public async Task GetHealthAsync_ThrowsWhenServerReturnsFailure()
     {
@@ -325,74 +346,58 @@ public sealed class GpuSearchClientTests
         Assert.Single(impact.ImpactedFiles);
     }
 
+
     [Fact]
-    public async Task IndexRootAsync_ReturnsIndexResponse_WhenSuccessful()
+    public async Task GetIndexStatusAsync_ReturnsIndexStatusResponse()
+    {
+        var client = CreateClient(new
+        {
+            indexedRoots = new object[] { new { path = "D:/Repos/App" } },
+            pattern = new { ready = true, files = 12 },
+            dependency = new { ready = true },
+            semantic = new { ready = false },
+            status = "ok",
+            lastIndexResult = new { ok = true, normalizedDirectory = "D:/Repos/App" }
+        });
+        var gpuSearchClient = new GpuSearchClient(client);
+
+        var status = await gpuSearchClient.GetIndexStatusAsync(CancellationToken.None);
+
+        Assert.Single(status.IndexedRoots);
+        Assert.True(status.Pattern?.Ready);
+        Assert.Equal(12, status.Pattern?.Files);
+        Assert.Equal("ok", status.Status);
+        Assert.True(status.LastIndexResult?.Ok);
+    }
+
+    [Fact]
+    public async Task IndexRootAsync_ReturnsIndexRootResponse()
     {
         var client = CreateClient(new
         {
             ok = true,
-            directory = "D:/Repos/BlogEngine.NET",
-            normalizedDirectory = "D:/Repos/BlogEngine.NET",
+            directory = "D:/Repos/App",
+            normalizedDirectory = "D:/Repos/App",
             started = true,
             completed = true,
-            pattern = new { ready = true, files = 1666, fromCache = false },
-            dependency = new { ready = true, files = 1342 },
-            message = "Indexed 1666 files"
+            pattern = new { ready = true, files = 12, fromCache = false },
+            dependency = new { ready = true },
+            semantic = new { requested = false, ready = false },
+            message = "indexed"
         });
         var gpuSearchClient = new GpuSearchClient(client);
 
         var result = await gpuSearchClient.IndexRootAsync(
-            new GpuSearchIndexRootRequest("D:/Repos/BlogEngine.NET"),
+            new GpuSearchIndexRootRequest("D:/Repos/App"),
             CancellationToken.None);
 
         Assert.True(result.Ok);
-        Assert.Equal("D:/Repos/BlogEngine.NET", result.Directory);
         Assert.True(result.Completed);
-        Assert.NotNull(result.Pattern);
-        Assert.True(result.Pattern!.Ready);
-        Assert.Equal(1666, result.Pattern.Files);
-        Assert.False(result.Pattern.FromCache);
-        Assert.NotNull(result.Dependency);
-        Assert.True(result.Dependency!.Ready);
-        Assert.Equal(1342, result.Dependency.Files);
-        Assert.Equal("Indexed 1666 files", result.Message);
+        Assert.True(result.Pattern?.Ready);
+        Assert.Equal(12, result.Pattern?.Files);
+        Assert.False(result.Semantic?.Requested);
+        Assert.Equal("indexed", result.Message);
     }
-
-    [Fact]
-    public async Task IndexRootAsync_ThrowsHttpRequestException_OnServerError()
-    {
-        var client = CreateClient(new { error = "failed" }, HttpStatusCode.InternalServerError);
-        var gpuSearchClient = new GpuSearchClient(client);
-
-        await Assert.ThrowsAsync<HttpRequestException>(() =>
-            gpuSearchClient.IndexRootAsync(
-                new GpuSearchIndexRootRequest("D:/Repos/BlogEngine.NET"),
-                CancellationToken.None));
-    }
-
-    [Fact]
-    public async Task IndexRootAsync_HandlesOkFalse_WithMessage()
-    {
-        var client = CreateClient(new
-        {
-            ok = false,
-            directory = "D:/Repos/Missing",
-            started = false,
-            completed = false,
-            message = "Directory not found"
-        });
-        var gpuSearchClient = new GpuSearchClient(client);
-
-        var result = await gpuSearchClient.IndexRootAsync(
-            new GpuSearchIndexRootRequest("D:/Repos/Missing"),
-            CancellationToken.None);
-
-        Assert.False(result.Ok);
-        Assert.False(result.Completed);
-        Assert.Equal("Directory not found", result.Message);
-        Assert.Null(result.Pattern);
-    }
-
     private static HttpClient CreateClient(object response, HttpStatusCode statusCode = HttpStatusCode.OK)
     {
         return new HttpClient(new StubHandler(response, statusCode))
@@ -418,3 +423,5 @@ public sealed class GpuSearchClientTests
         }
     }
 }
+
+

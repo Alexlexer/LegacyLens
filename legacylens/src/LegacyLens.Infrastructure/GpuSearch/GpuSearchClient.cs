@@ -20,23 +20,18 @@ public sealed class GpuSearchClient(HttpClient httpClient) : IGpuSearchClient
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
 
-        var status = root.TryGetProperty("status", out var statusEl) && statusEl.ValueKind == JsonValueKind.Object
-            ? (statusEl.TryGetProperty("pattern", out var p) ? p.GetString() : null)
-            : statusEl.ValueKind == JsonValueKind.String ? statusEl.GetString() : null;
+        var status = ReadString(root, "status")
+            ?? ReadNestedString(root, "status", "pattern")
+            ?? "ok";
+        var backend = ReadString(root, "backend")
+            ?? ReadNestedString(root, "device", "backend");
+        var device = ReadString(root, "device")
+            ?? ReadNestedString(root, "device", "torchDevice")
+            ?? backend;
+        var indexedFileCount = ReadInt(root, "indexedFileCount")
+            ?? ReadNestedInt(root, "pattern", "files");
 
-        string? backend = null;
-        string? device = null;
-        if (root.TryGetProperty("device", out var deviceEl) && deviceEl.ValueKind == JsonValueKind.Object)
-        {
-            backend = deviceEl.TryGetProperty("backend", out var b) ? b.GetString() : null;
-            device = deviceEl.TryGetProperty("torchDevice", out var d) ? d.GetString() : null;
-        }
-
-        int? indexedFileCount = null;
-        if (root.TryGetProperty("pattern", out var patternEl) && patternEl.ValueKind == JsonValueKind.Object)
-            indexedFileCount = patternEl.TryGetProperty("files", out var f) && f.TryGetInt32(out var n) ? n : null;
-
-        return new GpuSearchStats(status ?? "unknown", backend, device, indexedFileCount);
+        return new GpuSearchStats(status, backend, device, indexedFileCount);
     }
 
     public Task<IReadOnlyList<GpuSearchResult>> SearchCodeAsync(
@@ -84,16 +79,6 @@ public sealed class GpuSearchClient(HttpClient httpClient) : IGpuSearchClient
             ?? throw new InvalidOperationException("gpu-search-mcp returned empty response for /dependency/impact.");
     }
 
-    public async Task<SignalScanResponse> ScanSignalsAsync(
-        SignalScanRequest request,
-        CancellationToken cancellationToken)
-    {
-        using var response = await httpClient.PostAsJsonAsync("/scan/signals", request, JsonOptions, cancellationToken);
-        EnsureSuccess(response, "/scan/signals");
-        return await response.Content.ReadFromJsonAsync<SignalScanResponse>(JsonOptions, cancellationToken)
-            ?? throw new InvalidOperationException("gpu-search-mcp returned empty response for /scan/signals.");
-    }
-
     public async Task<GpuSearchIndexRootResponse> IndexRootAsync(
         GpuSearchIndexRootRequest request,
         CancellationToken cancellationToken)
@@ -102,6 +87,19 @@ public sealed class GpuSearchClient(HttpClient httpClient) : IGpuSearchClient
         EnsureSuccess(response, "/index/root");
         return await response.Content.ReadFromJsonAsync<GpuSearchIndexRootResponse>(JsonOptions, cancellationToken)
             ?? throw new InvalidOperationException("gpu-search-mcp returned empty response for /index/root.");
+    }
+
+    public Task<GpuSearchIndexStatusResponse> GetIndexStatusAsync(CancellationToken cancellationToken)
+        => GetRequiredAsync<GpuSearchIndexStatusResponse>("/index/status", cancellationToken);
+
+    public async Task<SignalScanResponse> ScanSignalsAsync(
+        SignalScanRequest request,
+        CancellationToken cancellationToken)
+    {
+        using var response = await httpClient.PostAsJsonAsync("/scan/signals", request, JsonOptions, cancellationToken);
+        EnsureSuccess(response, "/scan/signals");
+        return await response.Content.ReadFromJsonAsync<SignalScanResponse>(JsonOptions, cancellationToken)
+            ?? throw new InvalidOperationException("gpu-search-mcp returned empty response for /scan/signals.");
     }
 
     private async Task<IReadOnlyList<GpuSearchResult>> PostSearchAsync<TRequest>(
@@ -140,4 +138,51 @@ public sealed class GpuSearchClient(HttpClient httpClient) : IGpuSearchClient
         var result = await response.Content.ReadFromJsonAsync<T>(cancellationToken);
         return result ?? throw new InvalidOperationException($"gpu-search-mcp returned empty response for {path}.");
     }
+
+    private static string? ReadString(JsonElement root, string propertyName)
+    {
+        if (!root.TryGetProperty(propertyName, out var value))
+            return null;
+
+        return value.ValueKind switch
+        {
+            JsonValueKind.String => value.GetString(),
+            JsonValueKind.Number => value.GetRawText(),
+            JsonValueKind.True => "true",
+            JsonValueKind.False => "false",
+            _ => null
+        };
+    }
+
+    private static string? ReadNestedString(JsonElement root, string objectName, string propertyName)
+    {
+        if (!root.TryGetProperty(objectName, out var obj) || obj.ValueKind != JsonValueKind.Object)
+            return null;
+
+        return ReadString(obj, propertyName);
+    }
+
+    private static int? ReadInt(JsonElement root, string propertyName)
+    {
+        if (!root.TryGetProperty(propertyName, out var value))
+            return null;
+
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number))
+            return number;
+
+        if (value.ValueKind == JsonValueKind.String &&
+            int.TryParse(value.GetString(), out var parsed))
+            return parsed;
+
+        return null;
+    }
+
+    private static int? ReadNestedInt(JsonElement root, string objectName, string propertyName)
+    {
+        if (!root.TryGetProperty(objectName, out var obj) || obj.ValueKind != JsonValueKind.Object)
+            return null;
+
+        return ReadInt(obj, propertyName);
+    }
 }
+

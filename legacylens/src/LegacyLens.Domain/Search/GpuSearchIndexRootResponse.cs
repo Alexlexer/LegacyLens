@@ -1,26 +1,24 @@
 namespace LegacyLens.Domain.Search;
 
-public sealed record GpuSearchIndexRootResponse(
-    bool Ok,
-    string? Directory,
-    string? NormalizedDirectory,
-    bool Started,
-    bool Completed,
-    GpuSearchIndexPatternResult? Pattern,
-    GpuSearchIndexDepResult? Dependency,
-    GpuSearchIndexSemanticResult? Semantic,
-    string? Message);
+public sealed class GpuSearchIndexRootResponse
+{
+    public bool Ok { get; init; }
 
-public sealed record GpuSearchIndexPatternResult(
-    bool Ready,
-    int Files,
-    bool FromCache);
+    public string? Directory { get; init; }
 
-public sealed record GpuSearchIndexDepResult(
-    bool Ready,
-    int Files);
+    public string? NormalizedDirectory { get; init; }
 
-public sealed record GpuSearchIndexSemanticResult(
-    bool Requested,
-    bool Ready,
-    string? Message);
+    public bool? Started { get; init; }
+
+    public bool? Completed { get; init; }
+
+    public GpuSearchIndexComponentStatus? Pattern { get; init; }
+
+    public GpuSearchIndexComponentStatus? Dependency { get; init; }
+
+    public GpuSearchIndexComponentStatus? Semantic { get; init; }
+
+    public string? Message { get; init; }
+
+    public string? Error { get; init; }
+}

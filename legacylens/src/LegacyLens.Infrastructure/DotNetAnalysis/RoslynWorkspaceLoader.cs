@@ -8,6 +8,9 @@ namespace LegacyLens.Infrastructure.DotNetAnalysis;
 public sealed class RoslynWorkspaceLoader : IRoslynWorkspaceLoader
 {
     private static readonly object BuildLocatorLock = new();
+    private static string? _registeredMSBuildPath;
+
+    internal static string? RegisteredMSBuildPath => _registeredMSBuildPath;
 
     public async Task<RoslynWorkspaceLoadResult> LoadAsync(
         DotNetWorkspaceDiscoveryResult discoveryResult,
@@ -82,8 +85,7 @@ public sealed class RoslynWorkspaceLoader : IRoslynWorkspaceLoader
             var warning = selected.Kind == DotNetWorkspaceKind.Slnx
                 ? "If .slnx loading is not supported by the installed SDK/MSBuildWorkspace combination, use a .sln or .csproj fallback until Roslyn/MSBuild support is available."
                 : "Roslyn workspace loading failed. Ensure the local .NET SDK/MSBuild installation can evaluate the selected workspace.";
-            var msbuildInfo = RegisteredMSBuildPath != null ? $" [MSBuild: {RegisteredMSBuildPath}]" : "";
-            var detail = BuildExceptionChain(ex) + msbuildInfo;
+            var detail = BuildExceptionDetail(ex);
             return LoadedRoslynWorkspace.Failed(new RoslynWorkspaceLoadResult(
                 false,
                 selected.Path,
@@ -96,32 +98,39 @@ public sealed class RoslynWorkspaceLoader : IRoslynWorkspaceLoader
         }
     }
 
-    private static string BuildExceptionChain(Exception ex)
+    private static string BuildExceptionDetail(Exception exception)
     {
-        // Walk InnerException chain for the normal hierarchy
-        var parts = new System.Text.StringBuilder();
-        var current = ex;
-        while (current != null)
+        var parts = new List<string>();
+        var current = exception;
+        while (current is not null)
         {
-            if (parts.Length > 0) parts.Append(" → ");
-            parts.Append(current.GetType().Name).Append(": ").Append(current.Message);
+            parts.Add($"{current.GetType().Name}: {current.Message}");
             current = current.InnerException;
         }
-        // RemoteInvocationException wraps the remote exception as text in its Data or in a
-        // nested property — fall back to the full ToString() to capture it.
-        if (ex.InnerException == null && ex.ToString().Length > parts.Length + 20)
+
+        var detail = string.Join(" -> ", parts);
+
+        if (exception.InnerException is null)
         {
-            var full = ex.ToString();
-            var lines = full.Split('\n');
-            // First 6 lines usually contain the full remote chain without huge stack frames.
-            parts.Append(" | ").Append(string.Join(" | ", lines.Take(6).Select(l => l.Trim()).Where(l => l.Length > 0)));
+            var full = exception.ToString();
+            if (full.Length > detail.Length + 20)
+            {
+                var remotePrefix = string.Join(
+                    " | ",
+                    full.Split('\n')
+                        .Select(line => line.Trim())
+                        .Where(line => line.Length > 0)
+                        .Take(6));
+                if (!string.IsNullOrWhiteSpace(remotePrefix))
+                    detail = $"{detail} | {remotePrefix}";
+            }
         }
-        return parts.ToString();
+
+        if (!string.IsNullOrWhiteSpace(RegisteredMSBuildPath))
+            detail = $"{detail} [MSBuild: {RegisteredMSBuildPath}]";
+
+        return detail;
     }
-
-    private static string? _registeredMSBuildPath;
-
-    internal static string? RegisteredMSBuildPath => _registeredMSBuildPath;
 
     private static void EnsureMSBuildRegistered()
     {
@@ -133,68 +142,123 @@ public sealed class RoslynWorkspaceLoader : IRoslynWorkspaceLoader
             if (MSBuildLocator.IsRegistered || !MSBuildLocator.CanRegister)
                 return;
 
-            // Prefer a VS installation: it ships .NET Framework MSBuild which the
-            // BuildHost-net472 (required for .NET Framework solutions) can load.
-            // MSBuildLocator 1.11.2's QueryVisualStudioInstances() may not recognize VS 2026
-            // (DiscoveryType.VisualStudioSetup returns nothing), so we probe known paths first.
-            var knownVsMSBuildPaths = new[]
-            {
-                @"C:\Program Files\Microsoft Visual Studio\18\Enterprise\MSBuild\Current\Bin",
-                @"C:\Program Files\Microsoft Visual Studio\18\Professional\MSBuild\Current\Bin",
-                @"C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin",
-                @"C:\Program Files\Microsoft Visual Studio\17\Enterprise\MSBuild\Current\Bin",
-                @"C:\Program Files\Microsoft Visual Studio\17\Professional\MSBuild\Current\Bin",
-                @"C:\Program Files\Microsoft Visual Studio\17\Community\MSBuild\Current\Bin",
-            };
-
-            var vsPath = knownVsMSBuildPaths.FirstOrDefault(System.IO.Directory.Exists);
-            if (vsPath != null)
-            {
-                // VS MSBuild is .NET Framework only — BuildHost-netcore needs DOTNET_HOST_PATH
-                // to launch via dotnet.exe. RegisterMSBuildPath doesn't set this for VS instances.
-                var dotnetExe = @"C:\Program Files\dotnet\dotnet.exe";
-                if (System.IO.File.Exists(dotnetExe) &&
-                    string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH")))
-                {
-                    Environment.SetEnvironmentVariable("DOTNET_HOST_PATH", dotnetExe);
-                }
-
-                _registeredMSBuildPath = $"VS @ {vsPath}";
-                MSBuildLocator.RegisterMSBuildPath(vsPath);
-                return;
-            }
-
-            // Fall back to MSBuildLocator's VS discovery (covers non-standard install paths).
-            var vsInstance = MSBuildLocator.QueryVisualStudioInstances()
-                .Where(vs => vs.DiscoveryType == DiscoveryType.VisualStudioSetup)
-                .OrderByDescending(vs => vs.Version)
+            var visualStudioInstance = MSBuildLocator.QueryVisualStudioInstances()
+                .Where(IsVisualStudioInstance)
+                .OrderByDescending(GetVisualStudioInstancePreference)
+                .ThenByDescending(instance => instance.Version)
                 .FirstOrDefault();
 
-            if (vsInstance != null)
+            if (visualStudioInstance is not null)
             {
-                _registeredMSBuildPath = $"VS {vsInstance.Version} @ {vsInstance.MSBuildPath}";
-                MSBuildLocator.RegisterInstance(vsInstance);
+                ConfigureDotNetHostPath();
+                _registeredMSBuildPath = $"Visual Studio {visualStudioInstance.Version} @ {visualStudioInstance.MSBuildPath}";
+                MSBuildLocator.RegisterInstance(visualStudioInstance);
                 return;
             }
 
-            // No VS installation found — fall back to SDK 9.x (CoreCLR MSBuild).
-            // This works for SDK-style projects via BuildHost-netcore but will fail
-            // for .NET Framework solutions that require BuildHost-net472.
-            var sdkInstance = MSBuildLocator.QueryVisualStudioInstances()
-                .Where(vs => vs.DiscoveryType == DiscoveryType.DotNetSdk && vs.Version.Major < 10)
-                .OrderByDescending(vs => vs.Version)
-                .FirstOrDefault();
-
-            if (sdkInstance != null)
+            var directMsBuildPath = FindVisualStudioMSBuildPath();
+            if (directMsBuildPath is not null)
             {
-                _registeredMSBuildPath = $"SDK {sdkInstance.Version} @ {sdkInstance.MSBuildPath}";
-                MSBuildLocator.RegisterInstance(sdkInstance);
+                ConfigureDotNetHostPath();
+                _registeredMSBuildPath = $"Visual Studio MSBuild @ {directMsBuildPath}";
+                MSBuildLocator.RegisterMSBuildPath(directMsBuildPath);
                 return;
             }
 
-            _registeredMSBuildPath = "SDK defaults";
+            _registeredMSBuildPath = "MSBuildLocator.RegisterDefaults";
             MSBuildLocator.RegisterDefaults();
         }
+    }
+
+    // VS MSBuild is .NET Framework only - BuildHost-netcore needs DOTNET_HOST_PATH to
+    // launch via dotnet.exe. RegisterMSBuildPath doesn't set this for VS instances.
+    private static void ConfigureDotNetHostPath()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH")))
+            return;
+
+        var dotnetExe = @"C:\Program Files\dotnet\dotnet.exe";
+        if (File.Exists(dotnetExe))
+            Environment.SetEnvironmentVariable("DOTNET_HOST_PATH", dotnetExe);
+    }
+
+    private static bool IsVisualStudioInstance(VisualStudioInstance instance)
+    {
+        if (instance.Name.Contains("Visual Studio", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (string.IsNullOrWhiteSpace(instance.VisualStudioRootPath))
+            return false;
+
+        return Directory.Exists(Path.Combine(instance.VisualStudioRootPath, "Common7", "IDE"));
+    }
+
+    private static string? FindVisualStudioMSBuildPath()
+    {
+        if (!OperatingSystem.IsWindows())
+            return null;
+
+        var roots = new[]
+        {
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86)
+        };
+        // Prefer stable VS installs before preview/future toolsets. VS 2022 (17.x) is the
+        // safest match for Roslyn 5.3's bundled BuildHost-net472. VS 2026 (18) is supported
+        // via Directory.Build.targets exe.config patching.
+        var versions = new[] { "2022", "2019", "2017", "18", "2026" };
+        var editions = new[] { "Enterprise", "Professional", "Community", "BuildTools" };
+
+        foreach (var root in roots.Where(root => !string.IsNullOrWhiteSpace(root)).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            foreach (var version in versions)
+            {
+                foreach (var edition in editions)
+                {
+                    var candidate = Path.Combine(
+                        root,
+                        "Microsoft Visual Studio",
+                        version,
+                        edition,
+                        "MSBuild",
+                        "Current",
+                        "Bin");
+                    if (Directory.Exists(candidate))
+                        return PreferProcessArchitectureMSBuildPath(candidate);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static string PreferProcessArchitectureMSBuildPath(string msbuildBinPath)
+    {
+        var architectureSubdirectory = Environment.Is64BitProcess ? "amd64" : "x86";
+        var architecturePath = Path.Combine(msbuildBinPath, architectureSubdirectory);
+        return Directory.Exists(architecturePath) ? architecturePath : msbuildBinPath;
+    }
+
+    internal static int GetVisualStudioInstancePreference(VisualStudioInstance instance)
+        => GetVisualStudioVersionPreference(instance.Version);
+
+    internal static int GetVisualStudioVersionPreference(Version version)
+    {
+        if (version.Major == 17)
+            return 400;
+
+        if (version.Major == 16)
+            return 300;
+
+        if (version.Major == 15)
+            return 200;
+
+        if (version.Major >= 18)
+            return 100;
+
+        return 0;
     }
 
     public sealed record LoadedRoslynWorkspace(

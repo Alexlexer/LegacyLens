@@ -43,6 +43,11 @@
   -->
   <PropertyGroup>
     <_VS2026MSBuildBin>C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin</_VS2026MSBuildBin>
+    <!-- If VS 2022 is installed, RoslynWorkspaceLoader prefers it and the VS 2026 patches
+         are unnecessary (and would actively break BuildHost loading under MSBuild 17.x). -->
+    <_VS2022MSBuildBin>C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin</_VS2022MSBuildBin>
+    <_VS2022EntMSBuildBin>C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin</_VS2022EntMSBuildBin>
+    <_VS2022ProMSBuildBin>C:\Program Files\Microsoft Visual Studio\2022\Professional\MSBuild\Current\Bin</_VS2022ProMSBuildBin>
     <_Net472HostDir>$(OutputPath)BuildHost-net472</_Net472HostDir>
     <_Net472HostExeConfig>$(_Net472HostDir)\Microsoft.CodeAnalysis.Workspaces.MSBuild.BuildHost.exe.config</_Net472HostExeConfig>
   </PropertyGroup>
@@ -108,7 +113,7 @@
   </UsingTask>
 
   <Target Name="PatchNet472BuildHostSci" AfterTargets="Build"
-          Condition="Exists('$(_Net472HostExeConfig)') And Exists('$(_VS2026MSBuildBin)')">
+          Condition="Exists('$(_Net472HostExeConfig)') And Exists('$(_VS2026MSBuildBin)') And !Exists('$(_VS2022MSBuildBin)') And !Exists('$(_VS2022EntMSBuildBin)') And !Exists('$(_VS2022ProMSBuildBin)')">
     <!-- VS 2026 (MSBuild 18.x) ships its own versions of SCI/Text.Json + transitive deps.
          The Roslyn-bundled BuildHost-net472 references older versions; rewriting binding
          redirects + copying the VS 2026 DLLs lets BuildHost-net472 load under MSBuild 18.x. -->
